@@ -23,7 +23,7 @@ sudo apt install git
 Скачивание репозитория
 
 ```
-git clone https://github.com/acsl-mipt/drone-games.git
+git clone --single-branch https://github.com/acsl-mipt/drone-games.git
 ```
 
 Переход в скачанный репозиторий
