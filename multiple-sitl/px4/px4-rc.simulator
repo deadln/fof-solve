@@ -1,0 +1,3 @@
+#!/bin/sh
+
+simulator start $simulator_opts

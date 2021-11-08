@@ -1,0 +1,5 @@
+/workspace
+/airsim/*
+!/airsim/*.json
+!/airsim/*.sh
+__pycache__

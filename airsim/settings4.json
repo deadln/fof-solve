@@ -1,0 +1,27 @@
+{
+    "SettingsVersion": 1.2,
+    "SimMode": "Multirotor",
+    "Vehicles": {
+        "PX4": {
+            "VehicleType": "PX4Multirotor",
+		"X": 0,
+		"Y": 0,
+		"Z": 0,
+		"Yaw": 0,
+		"Roll": 0,
+		"Pitch": 0,
+            "Sensors":{
+                "Barometer":{
+                    "SensorType": 1,
+                    "Enabled": true,
+                    "PressureFactorSigma": 0.0001825
+                }
+            },
+            "Parameters": {
+                "NAV_RCL_ACT": 0,
+                "NAV_DLL_ACT": 0,
+                "COM_OBL_ACT": 1
+            }
+        }
+    }
+}
