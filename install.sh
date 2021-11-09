@@ -9,6 +9,7 @@ if [ "$1" == "update" ]; then
  exit
 fi
 
+sudo ./multiple-sitl/install/ros/sudo_deps.sh
 cat ./deps/apt.txt | sudo xargs apt install -y
 
 while read -a p; do
