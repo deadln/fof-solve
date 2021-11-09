@@ -25,7 +25,7 @@
 * NED (Север-Восток-Вниз) для локальной системы координат Симулятора, автопилота PX4 и сообщений Mavlink
 
 Точки отсчета и стороны света (Север-Восток) локальных систем координат автопилота и Симулятора совмещены (совпадают). Точке отсчета (0,0,0) совмещенной локальной системы координат соответствует точка (Широта, Долгота, Высота) глобальной системы координат, задаваемая в настройках.
-Все координаты объектов в текущем документе заданы в базисе ENU (Восток-Север-Вверх) совмещенной локальной системе координат.
+Все координаты объектов в текущем документе заданы в базисе ENU (Восток-Север-Вверх) совмещенной локальной системы координат.
 
 ### Алгоритм управления
 
@@ -42,20 +42,21 @@
 Алгоритмы должны быть или уникальными или иметь принципиальные отличия от общедоступных.
 
 #### Управляющие воздействия
+
 Программное управление автопилотом извне выполняется с помощью трех Mavlink сообщений:
- [SET_POSITION_TARGET_LOCAL_NED](https://mavlink.io/en/messages/common.html#SET_POSITION_TARGET_LOCAL_NED)
- [SET_POSITION_TARGET_GLOBAL_INT](https://mavlink.io/en/messages/common.html#SET_POSITION_TARGET_GLOBAL_INT)
- [SET_ATTITUDE_TARGET](https://mavlink.io/en/messages/common.html#SET_ATTITUDE_TARGET)
+* [SET_POSITION_TARGET_LOCAL_NED](https://mavlink.io/en/messages/common.html#SET_POSITION_TARGET_LOCAL_NED)
+* [SET_POSITION_TARGET_GLOBAL_INT](https://mavlink.io/en/messages/common.html#SET_POSITION_TARGET_GLOBAL_INT)
+* [SET_ATTITUDE_TARGET](https://mavlink.io/en/messages/common.html#SET_ATTITUDE_TARGET)
 
 Сообщения ROS/Mavros соответствующие Mavlink сообщениям:
-[PositionTarget](https://docs.ros.org/en/api/mavros_msgs/html/msg/PositionTarget.html)
-[GlobalPositionTarget](https://docs.ros.org/en/api/mavros_msgs/html/msg/GlobalPositionTarget.html)
-[AttitudeTarget](https://docs.ros.org/en/api/mavros_msgs/html/msg/AttitudeTarget.html)
+* [PositionTarget](https://docs.ros.org/en/api/mavros_msgs/html/msg/PositionTarget.html)
+* [GlobalPositionTarget](https://docs.ros.org/en/api/mavros_msgs/html/msg/GlobalPositionTarget.html)
+* [AttitudeTarget](https://docs.ros.org/en/api/mavros_msgs/html/msg/AttitudeTarget.html)
 
 Код обработки на стороне автопилота (для справки и уточнения деталей реализации):
-[SET_POSITION_TARGET_LOCAL_NED](https://github.com/PX4/PX4-Autopilot/blob/v1.11.3/src/modules/mavlink/mavlink_receiver.cpp#L771)
-[SET_POSITION_TARGET_GLOBAL_INT](https://github.com/PX4/PX4-Autopilot/blob/v1.11.3/src/modules/mavlink/mavlink_receiver.cpp#L936)
-[SET_ATTITUDE_TARGET](https://github.com/PX4/PX4-Autopilot/blob/v1.11.3/src/modules/mavlink/mavlink_receiver.cpp#L1402)
+* [SET_POSITION_TARGET_LOCAL_NED](https://github.com/PX4/PX4-Autopilot/blob/v1.11.3/src/modules/mavlink/mavlink_receiver.cpp#L771)
+* [SET_POSITION_TARGET_GLOBAL_INT](https://github.com/PX4/PX4-Autopilot/blob/v1.11.3/src/modules/mavlink/mavlink_receiver.cpp#L936)
+* [SET_ATTITUDE_TARGET](https://github.com/PX4/PX4-Autopilot/blob/v1.11.3/src/modules/mavlink/mavlink_receiver.cpp#L1402)
 
 Первое сообщение позволяет управлять в локальной системе координат по точкам, скоростям, ускорениям, рысканию и скорости рыскания.
 Второе - в глобальной системе координат по точкам (широта, долгота, высота), скоростям, ускорениям, рысканию и скорости рыскания.
@@ -65,6 +66,7 @@
 Пример реализации управления по точкам и скоростям в локальной системе координат представлен в файле `examples/group.py`.
 
 #### Изменение коэффициентов ПИД регуляторов автопилота
+
 Значения коэффициентов ПИД регуляторов автопилота выведены в соответствующие параметры. (см. ссылку на список параметров выше).
 Описание ПИД регуляторов и рекомендации по их изменению представлены в Multicopter PID Tuning Guide [Basic](https://docs.px4.io/master/en/config_mc/pid_tuning_guide_multicopter_basic.html) и [Advanced](https://docs.px4.io/master/en/config_mc/pid_tuning_guide_multicopter.html).
 Пример реализации считывания и изменения параметров представлен в файле `examples/group.py`.
@@ -74,6 +76,7 @@
 Формации представляют собой совокупность точек пространства, в каждой из которых должен находиться один аппарат группы. При этом, где находится какой из аппаратов группы задается алгоритмом, разработанным участником соревнований.
 
 ### Использование камер аппарата
+
 Для получения изображений с камер аппарата, необходимо пользоваться API симулятора.
-Процесс установки описан по [адресу](https://microsoft.github.io/AirSim/apis/).
-Общая информация по камерам и получению изображений с примерами описана по [адресу](https://microsoft.github.io/AirSim/image_apis/).
+Информация по API дана [здесь](https://microsoft.github.io/AirSim/apis/).
+Общая информация по камерам и получению изображений с примерами дана [здесь](https://microsoft.github.io/AirSim/image_apis/).
