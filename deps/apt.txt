@@ -1,2 +1,5 @@
+cmake
+build-essential
 ruby
 xterm
+python3-pip
