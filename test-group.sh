@@ -9,7 +9,7 @@ fi
 
 AIRSIM_PKG=formation ./start.sh -n $num $@
 
-echo "waiting ..."
+echo "waiting  ..."
 sleep 3
 
 ./examples/group.py $num
