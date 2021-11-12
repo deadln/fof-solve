@@ -6,6 +6,7 @@ import time
 import sys
 import math
 import random
+import numpy as np
 
 from sensor_msgs.msg import NavSatFix
 from geometry_msgs.msg import TwistStamped, PoseStamped

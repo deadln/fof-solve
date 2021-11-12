@@ -1,5 +1,5 @@
 import math
-
+import numpy as np
 
 class Point:
     '''3d Point (float)'''
@@ -65,6 +65,9 @@ class Point:
 
     def get_dict(self):
         return {'x': self.x, 'y': self.y, 'z': self.z}
+
+    def get_array(self):
+        return np.array([self.x, self.y, self.z])
 
     def get_cp(self, other_point):
         return Point(self.y * other_point.z - self.z * other_point.y,
