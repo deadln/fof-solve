@@ -3,3 +3,4 @@
 !/airsim/*.json
 !/airsim/*.sh
 __pycache__
+/.idea
