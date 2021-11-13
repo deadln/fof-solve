@@ -54,13 +54,15 @@ FULL_THROTTLE_DISTANCE = 10
 TURN_RADIUS = 8
 DESCENT_BIAS = 7
 DESCENT_DIST = 3
+LZ_IN_ROW = 8
 
 
 ## Вспомогательные функции
 
 # Функция для определения аномальной телеметрии
 def is_anomaly(telemetry):
-    return -0.1 < telemetry['x'] < 0.1 and -0.1 < telemetry['y'] < 0.1
+    # return -0.1 < telemetry['x'] < 0.1 and -0.1 < telemetry['y'] < 0.1
+    return -0.1 < telemetry[0] < 0.1 and -0.1 < telemetry[1] < 0.1
 
 
 # Функция знака
@@ -100,42 +102,59 @@ def to_holes_list(holes_string):
 def dict_to_point(voc):
     return Point(voc['x'], voc['y'], voc['z'])
 
+# Преобразование массива numpy точки в объект Point
+def array_to_point(voc):
+    return Point(voc[0], voc[1], voc[2])
+
 
 # Получение центральной точки препятствия в координатах симулятора
-def obstacle_to_coords(central, hole):  # Координаты точки центральной линии, параметры отверстия TODO: переделать
+def obstacle_to_coords(central, hole):  # Координаты точки центральной линии, параметры отверстия
     # Получение точек на стене
-    p1 = dict(central[-1])
-    p2 = dict(central[-1])
-    p2['z'] += 1
-    p3 = dict(central[-1])
+    # p1 = dict(central[-1])
+    # p2 = dict(central[-1])
+    p1 = np.array(central[-1])
+    p2 = np.array(central[-1])
+    # p2['z'] += 1
+    p2 += np.array([0,0,1])
+    # p3 = dict(central[-1])
+    p3 = np.array(central[-1])
     norm_vect = get_wall_norm_vect(central)
     norm_vect = rotate_vect_xy(norm_vect)
-    for key in p3.keys():
-        p3[key] += norm_vect[key]
+    # for key in p3.keys():
+    #     p3[key] += norm_vect[key]
+    p3 += norm_vect
     # Получение векторов на стене для рассчёта абсолютных координат отверстия
-    vx = dict(p3)
-    for key in vx.keys():
-        vx[key] -= p1[key]
-    vy = dict(p2)
-    for key in vy.keys():
-        vy[key] -= p1[key]
+    # vx = dict(p3)
+    vx = np.array(p3)
+    # for key in vx.keys():
+    #     vx[key] -= p1[key]
+    vx -= p1
+    # vy = dict(p2)
+    vy = np.array(p2)
+    # for key in vy.keys():
+    #     vy[key] -= p1[key]
+    vy -= p1
     # Вычисление абсолютных координат отверстия
-    res = dict(p1)
-    for key in res.keys():
-        res[key] += vx[key] * hole['x']
-    for key in res.keys():
-        res[key] += vy[key] * hole['y']
+    # res = dict(p1)
+    res = np.array(p1)
+    # for key in res.keys():
+    #     res[key] += vx[key] * hole['x']
+    # for key in res.keys():
+    #     res[key] += vy[key] * hole['y']
+    res += vx * hole['x']
+    res += vy * hole['y']
     return res
 
 
-def get_norm_vect(p1, p2):  # TODO: переделать
-    vect = {'x': p2['x'] - p1['x'], 'y': p2['y'] - p1['y'],
-            'z': p2['z'] - p1['z']}
-    vect_len = math.sqrt(pow(vect['x'], 2) + pow(vect['y'], 2) + pow(vect['z'], 2))
-    vect['x'] = vect['x'] / vect_len
-    vect['y'] = vect['y'] / vect_len
-    vect['z'] = vect['z'] / vect_len
-    return vect
+def get_norm_vect(p1, p2):
+    # vect = {'x': p2['x'] - p1['x'], 'y': p2['y'] - p1['y'],
+    #         'z': p2['z'] - p1['z']}
+    vect = p2 - p1
+    # vect_len = math.sqrt(pow(vect['x'], 2) + pow(vect['y'], 2) + pow(vect['z'], 2))
+    # vect['x'] = vect['x'] / vect_len
+    # vect['y'] = vect['y'] / vect_len
+    # vect['z'] = vect['z'] / vect_len
+    return vect / np.linalg.norm(vect)
 
 
 # Получение нормализованного вектора, направленного в сторону стены
@@ -150,22 +169,32 @@ def get_wall_norm_vect(cent_line):
 
 
 # Поворот вектора в плоскости XY на 90 вправо (dir >= 0) или влево (dir < 0)
-def rotate_vect_xy(vect, dir=1):  # TODO: переделать
+def rotate_vect_xy(vect, dir=1):  # TODO: переделать через матрицу поворота вектора
+    # if dir < 0:
+    #     swp = vect['x']
+    #     vect['x'] = vect['y'] * (-1)
+    #     vect['y'] = swp
+    # else:
+    #     swp = vect['x']
+    #     vect['x'] = vect['y']
+    #     vect['y'] = swp * (-1)
+    # return vect
+    v = np.array(vect)
     if dir < 0:
-        swp = vect['x']
-        vect['x'] = vect['y'] * (-1)
-        vect['y'] = swp
+        swp = v[0]
+        v[0] = v[1] * (-1)
+        v[1] = swp
     else:
-        swp = vect['x']
-        vect['x'] = vect['y']
-        vect['y'] = swp * (-1)
-    return vect
+        swp = v[0]
+        v[0] = v[1]
+        v[1] = swp * (-1)
+    return v
 
 
 # Расстояние между точками
-def get_distance(x1, y1, z1, x2, y2, z2):  # TODO: переделать
-    return math.sqrt(math.pow(x1 - x2, 2) + math.pow(y1 - y2, 2) + math.pow(z1 - z2, 2))
-
+def get_distance(p1, p2):
+    # return math.sqrt(math.pow(x1 - x2, 2) + math.pow(y1 - y2, 2) + math.pow(z1 - z2, 2))
+    return np.linalg.norm(p1 - p2)
 
 # Получить расстояние до линии, которая проецируется из выбранного дроном отверстия перпендикулярно стене
 def get_current_line_distance(n, telemetry):  # TODO: переделать
@@ -270,13 +299,16 @@ def set_vel(pt, vx, vy, vz):
 
 
 # Получить вектор скорости для полёта из точки p1 в точку p2 со скоростью speed
-def get_speed_vect(p1, p2, speed):  # TODO: переделать
-    vect = dict(p2)
-    vect_len = get_distance(p1['x'], p1['y'], p1['z'], p2['x'], p2['y'], p2['z'])
-    for key in vect.keys():
-        vect[key] -= p1[key]
-        vect[key] /= vect_len
-        vect[key] *= speed
+def get_speed_vect(p1, p2, speed):
+    # vect = dict(p2)
+    vect = np.array(p2)
+    # vect_len = get_distance(p1['x'], p1['y'], p1['z'], p2['x'], p2['y'], p2['z'])
+    vect_len = get_distance(p1, p2)
+    # for key in vect.keys():
+    #     vect[key] -= p1[key]
+    #     vect[key] /= vect_len
+    #     vect[key] *= speed
+    vect = (vect - p1) / vect_len * speed
     return vect
 
 
@@ -303,7 +335,7 @@ def get_least_count_hole(holes_list):
     return min_num
 
 
-def get_turn_point(n, telemetry):  # TODO: переделать
+def get_turn_point(n, telemetry):  # TODO: переделать (финальный босс) (2) YOLO
     global turn_point_counter
     if n in turn_lines.keys():
         pr_point = turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
@@ -346,7 +378,8 @@ def get_telemetry(n):  # TODO: переделать
     telemetry = data[n].get('local_position/pose')
     if telemetry is None:
         return None
-    telemetry = {'x': telemetry.pose.position.x, 'y': telemetry.pose.position.y, 'z': telemetry.pose.position.z}
+    # telemetry = {'x': telemetry.pose.position.x, 'y': telemetry.pose.position.y, 'z': telemetry.pose.position.z}
+    telemetry = np.array([telemetry.pose.position.x, telemetry.pose.position.y, telemetry.pose.position.z])
     return telemetry
 
 
@@ -392,56 +425,71 @@ def mc_race(pt, n, dt, target, telemetry):  # Повторяется с част
             set_vel(pt, target['x'], target['y'], target['z'])
 
 
-def is_good_hole(hole):
+def is_good_hole(hole):  # TODO: пересмотреть критерии подходящего отверстия
     if (hole['w'] >= 1.5) and (hole['h'] >= 1):
         return True
     else:
         return False
 
-def is_in_projection(n, telemetry):  # TODO: переделать
+def is_in_projection(n, telemetry):
     hole = walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']]
-    vect_to_line = hole['line'].pr_point(dict_to_point(telemetry)).get_dict()
-    for key in vect_to_line.keys():
-        vect_to_line[key] -= telemetry[key]
-    flat_vect = {'x': math.hypot(vect_to_line['x'], vect_to_line['y']), 'y': abs(vect_to_line['z'])}
+    # vect_to_line = hole['line'].pr_point(dict_to_point(telemetry)).get_dict()
+    vect_to_line = hole['line'].pr_point(array_to_point(telemetry)).get_array()
+    # for key in vect_to_line.keys():
+    #     vect_to_line[key] -= telemetry[key]
+    vect_to_line -= telemetry
+    # flat_vect = {'x': math.hypot(vect_to_line['x'], vect_to_line['y']), 'y': abs(vect_to_line['z'])}
+    flat_vect = {'x': math.hypot(vect_to_line[0], vect_to_line[1]), 'y': abs(vect_to_line[2])}
     if flat_vect['x'] < hole['w'] / 2 - LINE_EPS and flat_vect['y'] < hole['h'] / 2 - LINE_EPS:
         return True
     return False
 
 # Получить место для посадки
-def get_lz(n):  # TODO: переделать
+def get_lz(n):
     # Точка отчёта - последняя точка последней центральной линии
-    land_zone = dict(centrals[-1]['points'][-1])
+    # land_zone = dict(centrals[-1]['points'][-1])
+    land_zone = np.array(centrals[-1]['points'][-1])
     norm_vect = get_wall_norm_vect(centrals[-1]['points'])  # Вектор в глухую стену
     # Сдвигаем точку до другого края посадочной площадки
-    land_zone['x'] -= norm_vect['x'] * 3
-    land_zone['y'] -= norm_vect['y'] * 3
-    # Поворачиваем вектор на 90 градусов влево
-    swp = norm_vect['x']
-    norm_vect['x'] = norm_vect['y'] * (-1)
-    norm_vect['y'] = swp
+    # land_zone['x'] -= norm_vect['x'] * 3
+    # land_zone['y'] -= norm_vect['y'] * 3
+    land_zone -= norm_vect * 3
+    # Поворачиваем вектор на 90 градусов влево TODO: сделать поворот через функцию rotate_vect_xy()
+    # swp = norm_vect['x']
+    # norm_vect['x'] = norm_vect['y'] * (-1)
+    # norm_vect['y'] = swp
+    swp = norm_vect[0]
+    norm_vect[0] = norm_vect[1] * (-1)
+    norm_vect[1] = swp
     # Сдвигаемся в левый нижний угол посадочной площадки
-    land_zone['x'] += norm_vect['x'] * 7
-    land_zone['y'] += norm_vect['y'] * 7
+    # land_zone['x'] += norm_vect['x'] * 7
+    # land_zone['y'] += norm_vect['y'] * 7
+    land_zone += norm_vect * 7
     lz_num = len(lz)  # Номер посадочного места
     norm_vect = get_wall_norm_vect(centrals[-1]['points'])
     # Отсчитываем посадочное место в сторону глухой стены
-    land_zone['x'] -= norm_vect['x'] * (lz_num // 8) * 2
-    land_zone['y'] -= norm_vect['y'] * (lz_num // 8) * 2
-    # Поворачиваем вектор на 90 градусов вправо
-    swp = norm_vect['x']
-    norm_vect['x'] = norm_vect['y']
-    norm_vect['y'] = swp * (-1)
+    # land_zone['x'] -= norm_vect['x'] * (lz_num // LZ_IN_ROW) * 2
+    # land_zone['y'] -= norm_vect['y'] * (lz_num // LZ_IN_ROW) * 2
+    land_zone -= norm_vect * (lz_num // LZ_IN_ROW) * 2
+    # Поворачиваем вектор на 90 градусов вправо TODO: сделать поворот через функцию rotate_vect_xy()
+    # swp = norm_vect['x']
+    # norm_vect['x'] = norm_vect['y']
+    # norm_vect['y'] = swp * (-1)
+    swp = norm_vect[0]
+    norm_vect[0] = norm_vect[1]
+    norm_vect[1] = swp * (-1)
     # Отсчитываем посадочное место вправо
-    land_zone['x'] += norm_vect['x'] * (lz_num % 8) * 2
-    land_zone['y'] += norm_vect['y'] * (lz_num % 8) * 2
-    land_zone['z'] = 1
+    # land_zone['x'] += norm_vect['x'] * (lz_num % LZ_IN_ROW) * 2
+    # land_zone['y'] += norm_vect['y'] * (lz_num % LZ_IN_ROW) * 2
+    # land_zone['z'] = 1
+    land_zone += norm_vect * (lz_num % LZ_IN_ROW) * 2
     return land_zone
 
 
 # Получить полётную цель
-def set_target(n, telemetry):  # TODO: переделать
-    target = {'x': 0, 'y': 0, 'z': 0}
+def set_target(n, telemetry):  # TODO: переделать (1)
+    # target = {'x': 0, 'y': 0, 'z': 0}
+    target = {'value': np.array([0, 0, 0])}
     try:
         # Признак того, что трасса пройдена, и нужно снижаться на посадку
         if centrals[current_obstacle[n]['wall_num']]['name'] == '|':
@@ -452,7 +500,7 @@ def set_target(n, telemetry):  # TODO: переделать
             if n not in lz.keys():
                 print(f'DRONE {n} IS LANDING')
                 lz[n] = get_lz(n)
-            target = lz[n]
+            target['value'] = lz[n]
             target['mode'] = 'pos'
             target['tag'] = 'landing'
         # Если точка последняя, значит надо лететь в отверстие в стене
@@ -462,13 +510,14 @@ def set_target(n, telemetry):  # TODO: переделать
                 current_obstacle[n]['hole_num'] = get_least_count_hole(walls[current_obstacle[n]['wall_num']]['holes'])
             # Получаем абсолютные координаты отверстия с помощью последней точки центральной линии и локальных
             # координат отверстия
-            target = obstacle_to_coords(centrals[current_obstacle[n]['wall_num']]['points'],
+            target['value'] = obstacle_to_coords(centrals[current_obstacle[n]['wall_num']]['points'],
                                         walls[current_obstacle[n]['wall_num']]['holes'][
                                             current_obstacle[n]['hole_num']])
             # Смещаем цель полёта относительно центра отверстия немного назад
             wall_vect = get_wall_norm_vect(centrals[current_obstacle[n]['wall_num']]['points'])
-            for key in target.keys():
-                target[key] += wall_vect[key] * TARGET_POINT_BIAS
+            # for key in target.keys():
+            #     target[key] += wall_vect[key] * TARGET_POINT_BIAS
+            target['value'] += wall_vect * TARGET_POINT_BIAS
             # if get_current_line_distance(n, telemetry) < min(
             #         walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']]['w'],
             #         walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']][
@@ -482,15 +531,20 @@ def set_target(n, telemetry):  # TODO: переделать
             #    print(f'{n}: DESCENTING')
             #    target = {'x': 0, 'y': 0, 'z': -1}
             #    target['mode'] = 'vel'
+
+            # Если дрон в проекции отверстия, то лететь на постоянной скорости
+            # if is_in_projection(n, telemetry) and \
+            #         walls[current_obstacle[n]['wall_num']]['surface'].get_point_dist(
+            #             Point(telemetry['x'], telemetry['y'], telemetry['z'])) < FULL_THROTTLE_DISTANCE:
             if is_in_projection(n, telemetry) and \
-                    walls[current_obstacle[n]['wall_num']]['surface'].get_point_dist(
-                        Point(telemetry['x'], telemetry['y'], telemetry['z'])) < FULL_THROTTLE_DISTANCE:
+                    walls[current_obstacle[n]['wall_num']]['surface'].get_point_dist(array_to_point(telemetry)
+                                                                                     ) < FULL_THROTTLE_DISTANCE:
                 # Смещаем цель полёта вперёд, за стену
-                for key in target.keys():
-                    target[key] -= wall_vect[key] * TARGET_POINT_BIAS * 2
+                # for key in target.keys():
+                #     target[key] -= wall_vect[key] * TARGET_POINT_BIAS * 2
+                target['value'] -= wall_vect * TARGET_POINT_BIAS * 2
                 # Назначаем полётной целью вектор скорости, направленный в точку за стеной
-                target = get_speed_vect({'x': telemetry['x'], 'y': telemetry['y'],
-                                         'z': telemetry['z']}, target, SPEED)
+                target['value'] = get_speed_vect(telemetry, target, SPEED)
                 target['mode'] = 'vel'
 
             # Если мы далеко от отверстия, то аккуратно приближаемся
@@ -499,7 +553,7 @@ def set_target(n, telemetry):  # TODO: переделать
                 target['tag'] = 'approaching'
         # В противном случае сначала надо достигнуть точки центральной линии по пути
         else:
-            target = get_turn_point(n, telemetry)
+            target['value'] = get_turn_point(n, telemetry)  # (2)
             # target = centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']]
             target['mode'] = 'pos'
             target['tag'] = 'turn'
@@ -554,38 +608,47 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
                     print('THE FINAL WALL HAS BEEN APPEARED')
                 centrals.append(central)
             if wall is not None and len(walls) == 0 or walls[-1]['name'] != wall['name']:  # Проверка на новую стену
-                holes = []
-                for hole in wall['holes']:
-                    holes.append(obstacle_to_coords(central['points'], hole))
+                holes = []                                                     # Сомнительный
+                for hole in wall['holes']:                                     # кусок
+                    holes.append(obstacle_to_coords(central['points'], hole))  # кода
                 # Нахождение трёх точек для плоскости стены
-                p1 = dict_to_point(central['points'][-1])
-                p2 = dict_to_point(central['points'][-1])
+                # p1 = dict_to_point(central['points'][-1])
+                # p2 = dict_to_point(central['points'][-1])
+                p1 = array_to_point(central['points'][-1])
+                p2 = array_to_point(central['points'][-1])
                 p2.add_point(Point(0, 0, 1))
-                p3 = dict_to_point(central['points'][-1])
+                # p3 = dict_to_point(central['points'][-1])
+                p3 = array_to_point(central['points'][-1])
                 norm_vect = get_wall_norm_vect(central['points'])
                 norm_vect = rotate_vect_xy(norm_vect)
                 p3.add_point(dict_to_point(norm_vect))
                 # Смещение точек плоскости немного вперёд
                 norm_vect = get_wall_norm_vect(central['points'])
-                for key in norm_vect.keys():
-                    norm_vect[key] *= TARGET_SURFACE_BIAS  # Величина смещения плоскости
-                norm_vect = dict_to_point(norm_vect)
+                # for key in norm_vect.keys():
+                #     norm_vect[key] *= TARGET_SURFACE_BIAS  # Величина смещения плоскости
+                norm_vect *= TARGET_SURFACE_BIAS
+                # norm_vect = dict_to_point(norm_vect)
+                norm_vect = array_to_point(norm_vect)
                 p1.add_point(norm_vect)
                 p2.add_point(norm_vect)
                 p3.add_point(norm_vect)
                 # Создание плоскости и назначение признака того что дрон преодолел плоскость
                 wall['surface'] = Surface(p1, p2, p3)
-                wall['surface_sign'] = sign(wall['surface'].substitute_point(dict_to_point(central['points'][-1])))
-                # Построение прямой, перпендикулярной стене, для каждой точки центра отверстия, а также удаление слишком
-                # маленьких отверстий
+                # wall['surface_sign'] = sign(wall['surface'].substitute_point(dict_to_point(central['points'][-1])))
+                wall['surface_sign'] = sign(wall['surface'].substitute_point(array_to_point(central['points'][-1])))
+                # Построение прямой, перпендикулярной стене, для каждой точки центра отверстия, а также инвалидация
+                # слишком маленьких отверстий
                 for i in range(len(wall['holes'])):
                     if is_good_hole(wall['holes'][i]):
-                        p1 = dict_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
-                        p2 = dict_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
-                        p2.add_point(dict_to_point(get_wall_norm_vect(central['points'])))
+                        # p1 = dict_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
+                        # p2 = dict_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
+                        p1 = array_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
+                        p2 = array_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
+                        # p2.add_point(dict_to_point(get_wall_norm_vect(central['points'])))
+                        p2.add_point(array_to_point(get_wall_norm_vect(central['points'])))
                         wall['holes'][i]['line'] = Line(p1, p2)
                     else:
-                        wall['holes'][i]['drones'] = INF
+                        wall['holes'][i]['drones'] = INF  # Эта строчка затащила хакатон
                 print('NEW WALL', wall)
                 walls.append(wall)
         else:
@@ -616,8 +679,10 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
                 # telemetry = data[n].get('local_position/pose')  # Получение текущих координат дрона
                 telemetry = telemetries[n]  # Получение текущих координат дрона
                 if telemetry is not None:
-                    telems[n].publish(str(telemetry['x']) + ' ' + str(telemetry['y']) + ' ' + str(
-                        telemetry['z']))
+                    # telems[n].publish(str(telemetry['x']) + ' ' + str(telemetry['y']) + ' ' + str(
+                    #     telemetry['z']))
+                    telems[n].publish(str(telemetry[0]) + ' ' + str(telemetry[1]) + ' ' + str(
+                        telemetry[2]))
                     if not is_anomaly(telemetry):
                         set_mode(n, "OFFBOARD")  # Переключение в режим полёта по программе
                         arming(n, True)
@@ -628,7 +693,7 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
                     # print(f'{n}: TELEMETRY IS MISSING')
                     raise IndexError
 
-                target = set_target(n, telemetry)
+                target = set_target(n, telemetry)  # (1)
                 pos = Point(telemetry['x'], telemetry['y'], telemetry['z'])
 
                 # Если назначена посадка
