@@ -115,7 +115,7 @@ def obstacle_to_coords(central, hole):  # Координаты точки цен
     p1 = np.array(central[-1])
     p2 = np.array(central[-1])
     # p2['z'] += 1
-    p2 += np.array([0,0,1])
+    p2 += np.array([0.0,0.0,1.0])
     # p3 = dict(central[-1])
     p3 = np.array(central[-1])
     norm_vect = get_wall_norm_vect(central)
@@ -197,9 +197,11 @@ def get_distance(p1, p2):
     return np.linalg.norm(p1 - p2)
 
 # Получить расстояние до линии, которая проецируется из выбранного дроном отверстия перпендикулярно стене
-def get_current_line_distance(n, telemetry):  # TODO: переделать
+def get_current_line_distance(n, telemetry):
+    # return walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']]['line'].get_point_dist(
+    #     Point(telemetry['x'], telemetry['y'], telemetry['z']))
     return walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']]['line'].get_point_dist(
-        Point(telemetry['x'], telemetry['y'], telemetry['z']))
+        Point(telemetry[0], telemetry[1], telemetry[2]))
 
 
 ## Функции связанные с полётом и ROS
@@ -274,7 +276,7 @@ def set_mode(n, new_mode):
 
 
 # Управление по точкам, локальная система координат.
-def set_pos(pt, x, y, z):
+def set_pos(pt, x, y, z):  # TODO: Переделать на прием массива в качестве аргумента
     pt.type_mask = pt.IGNORE_VX | pt.IGNORE_VY | pt.IGNORE_VZ | pt.IGNORE_AFX | pt.IGNORE_AFY | pt.IGNORE_AFZ | pt.IGNORE_YAW | pt.IGNORE_YAW_RATE
     # pt.type_mask = pt.IGNORE_VX | pt.IGNORE_VY | pt.IGNORE_VZ | pt.IGNORE_AFX | pt.IGNORE_AFY | pt.IGNORE_AFZ
 
@@ -287,7 +289,7 @@ def set_pos(pt, x, y, z):
 
 
 # Управление по скоростям, локальная система координат, направления совпадают с оными в глобальной системе координат
-def set_vel(pt, vx, vy, vz):
+def set_vel(pt, vx, vy, vz):  # TODO: Переделать на прием массива в качестве аргумента
     pt.type_mask = pt.IGNORE_PX | pt.IGNORE_PY | pt.IGNORE_PZ | pt.IGNORE_AFX | pt.IGNORE_AFY | pt.IGNORE_AFZ | pt.IGNORE_YAW | pt.IGNORE_YAW_RATE
 
     # Скорость, направление на восток
@@ -335,46 +337,73 @@ def get_least_count_hole(holes_list):
     return min_num
 
 
-def get_turn_point(n, telemetry):  # TODO: переделать (финальный босс) (2) YOLO
-    global turn_point_counter
-    if n in turn_lines.keys():
-        pr_point = turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
-        if get_distance(pr_point['x'], pr_point['y'], pr_point['z'], turn_points[n]['x'], turn_points[n]['y'], turn_points[n]['z']) > TURN_RADIUS:
+# Получить точку через которую будет осуществляться поворот
+def get_turn_point(n, telemetry):  # Номер коптера и его положение
+    # TODO: оптимизировать рассчёт поворотных линий: рассчитывать их один раз, а затем для каждого коптера брать готовую
+    global turn_point_counter  # Нужно будет удалить
+    if n in turn_lines.keys():  # Если для коптера уже есть поворотная линия
+        # pr_point = turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
+        pr_point = turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
+        # if get_distance(pr_point['x'], pr_point['y'], pr_point['z'], turn_points[n]['x'], turn_points[n]['y'], turn_points[n]['z']) > TURN_RADIUS:
+        if get_distance(pr_point, turn_points[n]) > TURN_RADIUS:
             return turn_points[n]
-        return turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
+        # return turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
+        return turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
+    # Получаем точку центральной линии на повороте
     cur_cent_point = centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']]
-    v1 = get_norm_vect(centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']],
+    # Получаем векторы от точки поворота в стророну следующей и предыдущей стен
+    # v1 = get_norm_vect(centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']],
+    #                    centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num'] + 1])
+    # v2 = get_norm_vect(centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']],
+    #                    centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num'] - 1])
+    # turn_point = dict(centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']])
+    v1 = get_norm_vect(cur_cent_point,
                        centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num'] + 1])
-    v2 = get_norm_vect(centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']],
+    v2 = get_norm_vect(cur_cent_point,
                        centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num'] - 1])
-    turn_point = dict(centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']])
-    v1_p = dict_to_point(v1)
-    v2_p = dict_to_point(v2)
-    vect_cp = v1_p.get_cp(v2_p).get_dict()
-    line_point = {}
-    for key in v2.keys():
-        turn_point[key] += (v1[key] + v2[key]) * TURN_POINT_BIAS
-        if key == 'z' and v2['z'] > 0.1:
-            print('DESCENT')
-            turn_point[key] = cur_cent_point['z'] - DESCENT_BIAS
-        line_point[key] = turn_point[key] + vect_cp[key]
+    # turn_point = dict(cur_cent_point)
+    turn_point = np.array(cur_cent_point)
+    # v1_p = dict_to_point(v1)
+    # v2_p = dict_to_point(v2)
+    v1_p = array_to_point(v1)
+    v2_p = array_to_point(v2)
+    vect_cp = v1_p.get_cp(v2_p).get_array()  # Вектор для построения линии поворота
+    # Получение точки для построение линии поворота. Смещение точки поворота во внутрь
+    # line_point = {}
+    # for key in v2.keys():
+    #     turn_point[key] += (v1[key] + v2[key]) * TURN_POINT_BIAS
+    #     if key == 'z' and v2['z'] > 0.1:
+    #         print('DESCENT')
+    #         turn_point[key] = cur_cent_point['z'] - DESCENT_BIAS
+    #     line_point[key] = turn_point[key] + vect_cp[key]
+    turn_point += (v1 + v2) * TURN_POINT_BIAS
+    # Если лабиринт идёт вниз
+    if v2[2] > 0.1:
+        print('DESCENT')
+        turn_point[2] = cur_cent_point[2] - DESCENT_BIAS
+    line_point = turn_point + vect_cp
+
+
     #     vect_cp[key] *= TURN_POINT_DISTANCE
     #     turn_point[key] -= vect_cp[key] * (POINTS_PER_TURN / 2)
     #     turn_point[key] += vect_cp[key] * turn_point_counter
     # turn_point_counter = (turn_point_counter + 1) % POINTS_PER_TURN
     # turn_lines[n] = turn_point
-    print('TURN', dict_to_point(turn_point), dict_to_point(line_point))
+    print('TURN', array_to_point(turn_point), array_to_point(line_point))
     turn_points[n] = turn_point
-    turn_lines[n] = Line(dict_to_point(turn_point), dict_to_point(line_point))
-    cur_cent_point = centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']]
-    pr_point = turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
-    if get_distance(pr_point['x'], pr_point['y'], pr_point['z'], turn_points[n]['x'], turn_points[n]['y'],
-                    turn_points[n]['z']) > TURN_RADIUS:
+    turn_lines[n] = Line(array_to_point(turn_point), array_to_point(line_point))
+    # cur_cent_point = centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']]
+    # pr_point = turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
+    pr_point = turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
+    # if get_distance(pr_point['x'], pr_point['y'], pr_point['z'], turn_points[n]['x'], turn_points[n]['y'],
+    #                 turn_points[n]['z']) > TURN_RADIUS:
+    if get_distance(pr_point, turn_points[n]) > TURN_RADIUS:
         return turn_points[n]
-    return turn_lines[n].pr_point(dict_to_point(telemetry)).get_dict()
+    # return turn_lines[n].pr_point(dict_to_point(telemetry)).get_array()
+    return turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
 
 
-def get_telemetry(n):  # TODO: переделать
+def get_telemetry(n):
     telemetry = data[n].get('local_position/pose')
     if telemetry is None:
         return None
@@ -384,27 +413,32 @@ def get_telemetry(n):  # TODO: переделать
 
 
 # Основная функция полётных команд
-def mc_race(pt, n, dt, target, telemetry):  # Повторяется с частотой freq  # TODO: переделать
+def mc_race(pt, n, dt, target, telemetry):  # Повторяется с частотой freq
     global last_drone_departion_time
 
     # Меры по избежанию столкновений
     close_drones = []
     for i in range(1, instances_num + 1):
-        if telemetry is not None and telemetries[i] is not None and i != n and get_distance(telemetry['x'],
-                                                                                            telemetry['y'],
-                                                                                            telemetry['z'],
-                                                                                            telemetries[i]['x'],
-                                                                                            telemetries[i]['y'],
-                                                                                            telemetries[i][
-                                                                                                'z']) < COLLISION_DISTANCE:
+        # if telemetry is not None and telemetries[i] is not None and i != n and get_distance(telemetry['x'],
+        #                                                                                     telemetry['y'],
+        #                                                                                     telemetry['z'],
+        #                                                                                     telemetries[i]['x'],
+        #                                                                                     telemetries[i]['y'],
+        #                                                                                     telemetries[i][
+        #                                                                                         'z']) < COLLISION_DISTANCE:
+        if telemetry is not None and telemetries[i] is not None and i != n and \
+                get_distance(telemetry, telemetries[i]) < COLLISION_DISTANCE:
             close_drones.append(telemetries[i])
     if len(close_drones) > 0:
-        correction_vector = {'x': 0, 'y': 0, 'z': 0}
+        # correction_vector = {'x': 0, 'y': 0, 'z': 0}
+        correction_vector = np.array([0.0,0.0,0.0])
         for drone in close_drones:
             drone_vect = get_speed_vect(drone, telemetry, CORRECTION_SPEED)
-            for key in correction_vector.keys():
-                correction_vector[key] += drone_vect[key]
-        set_vel(pt, correction_vector['x'], correction_vector['y'], correction_vector['z'])
+            # for key in correction_vector.keys():
+            #     correction_vector[key] += drone_vect[key]
+            correction_vector += drone_vect
+        # set_vel(pt, correction_vector['x'], correction_vector['y'], correction_vector['z'])
+        set_vel(pt, correction_vector[0], correction_vector[1], correction_vector[2])
         return
 
     if current_obstacle[n]['state'] == 'takeoff':
@@ -412,17 +446,17 @@ def mc_race(pt, n, dt, target, telemetry):  # Повторяется с част
         set_vel(pt, 0, 0, 0.4)
     if current_obstacle[n]['state'] == 'takeoff' and \
             (last_drone_departion_time == -1 or dt - last_drone_departion_time > DELAY_BETWEEN_DRONES) and \
-            (telemetry is not None and telemetry['z'] >= 0.3) or \
+            (telemetry is not None and telemetry[2] >= 0.3) or \
             current_obstacle[n]['state'] == 'flight' or current_obstacle[n]['state'] == 'landing':
         if current_obstacle[n]['state'] == 'takeoff':
             current_obstacle[n]['state'] = 'flight'
             last_drone_departion_time = dt
         # Летим в точку target
         if target['mode'] == 'pos':
-            set_pos(pt, target['x'], target['y'], target['z'])
+            set_pos(pt, target['value'][0], target['value'][1], target['value'][2])
         # Или устанавливаем вектор скорости target
         elif target['mode'] == 'vel':
-            set_vel(pt, target['x'], target['y'], target['z'])
+            set_vel(pt, target['value'][0], target['value'][1], target['value'][2])
 
 
 def is_good_hole(hole):  # TODO: пересмотреть критерии подходящего отверстия
@@ -483,13 +517,14 @@ def get_lz(n):
     # land_zone['y'] += norm_vect['y'] * (lz_num % LZ_IN_ROW) * 2
     # land_zone['z'] = 1
     land_zone += norm_vect * (lz_num % LZ_IN_ROW) * 2
+    land_zone[2] = 1
     return land_zone
 
 
 # Получить полётную цель
-def set_target(n, telemetry):  # TODO: переделать (1)
+def set_target(n, telemetry):
     # target = {'x': 0, 'y': 0, 'z': 0}
-    target = {'value': np.array([0, 0, 0])}
+    target = {'value': np.array([0.0, 0.0, 0.0])}
     try:
         # Признак того, что трасса пройдена, и нужно снижаться на посадку
         if centrals[current_obstacle[n]['wall_num']]['name'] == '|':
@@ -544,7 +579,7 @@ def set_target(n, telemetry):  # TODO: переделать (1)
                 #     target[key] -= wall_vect[key] * TARGET_POINT_BIAS * 2
                 target['value'] -= wall_vect * TARGET_POINT_BIAS * 2
                 # Назначаем полётной целью вектор скорости, направленный в точку за стеной
-                target['value'] = get_speed_vect(telemetry, target, SPEED)
+                target['value'] = get_speed_vect(telemetry, target['value'], SPEED)
                 target['mode'] = 'vel'
 
             # Если мы далеко от отверстия, то аккуратно приближаемся
@@ -562,12 +597,12 @@ def set_target(n, telemetry):  # TODO: переделать (1)
         if telemetry is not None:
             print(f'{n}:', telemetry)
         # print(f'{n}: INDEX ERROR')
-        target = {'x': 0, 'y': 0, 'z': 0, 'mode': 'vel'}  # Мера для стабилизации дрона
+        target = {'value': np.array([0.0, 0.0, 0.0]), 'mode': 'vel'}  # Мера для стабилизации дрона
     return target
 
 
 # Функция цикла автономного полёта
-def offboard_loop():  # Запускается один раз  # TODO: переделать
+def offboard_loop():  # Запускается один раз
     # создаем топики, для публикации управляющих значений, а также полётных целей (для дебага)
     pub_pt = {}
     targets = {}
@@ -601,8 +636,8 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
         wall = current_track_data.get('/path_generator/walls')
         # Обновление списков стен и центральных линий
         if central is not None and wall is not None:
-            central = to_points_list(str(central.data))  # TODO: я остановился здесь, я проверял эту переменную
-            wall = to_holes_list(str(wall.data)) # TODO: и я изменил эту функцию
+            central = to_points_list(str(central.data))
+            wall = to_holes_list(str(wall.data))
             if len(centrals) == 0 or centrals[-1]['name'] != central['name']:  # Проверка на новую центральную линию
                 if central['name'] == '|':
                     print('THE FINAL WALL HAS BEEN APPEARED')
@@ -621,7 +656,8 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
                 p3 = array_to_point(central['points'][-1])
                 norm_vect = get_wall_norm_vect(central['points'])
                 norm_vect = rotate_vect_xy(norm_vect)
-                p3.add_point(dict_to_point(norm_vect))
+                # p3.add_point(dict_to_point(norm_vect))
+                p3.add_point(array_to_point(norm_vect))
                 # Смещение точек плоскости немного вперёд
                 norm_vect = get_wall_norm_vect(central['points'])
                 # for key in norm_vect.keys():
@@ -693,8 +729,9 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
                     # print(f'{n}: TELEMETRY IS MISSING')
                     raise IndexError
 
-                target = set_target(n, telemetry)  # (1)
-                pos = Point(telemetry['x'], telemetry['y'], telemetry['z'])
+                target = set_target(n, telemetry)
+                # pos = Point(telemetry['x'], telemetry['y'], telemetry['z'])
+                pos = array_to_point(telemetry)
 
                 # Если назначена посадка
                 if current_obstacle[n]['state'] == 'landing':
@@ -712,8 +749,11 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
                     current_obstacle[n]['hole_num'] = -1
                     target = set_target(n, telemetry)  # Назначение новой стены
                 # Если достигнута окрестность центра поворота
-                elif current_obstacle[n]['point_num'] < len(centrals[current_obstacle[n]['wall_num']]['points']) - 1 and \
-                    turn_lines[n].get_point_dist(dict_to_point(telemetry)) < TURN_EPS:
+                # elif current_obstacle[n]['point_num'] < len(centrals[current_obstacle[n]['wall_num']]['points']) - 1 and \
+                #     turn_lines[n].get_point_dist(dict_to_point(telemetry)) < TURN_EPS:
+                elif current_obstacle[n]['point_num'] < len(
+                        centrals[current_obstacle[n]['wall_num']]['points']) - 1 and \
+                        turn_lines[n].get_point_dist(array_to_point(telemetry)) < TURN_EPS:
                         # get_distance(telemetry['x'], telemetry['y'], telemetry['z'],
                         #              target['x'], target['y'], target['z']) < TURN_EPS:
                     print(f'{n}:NEXT POINT')
@@ -725,15 +765,13 @@ def offboard_loop():  # Запускается один раз  # TODO: пере
                 # print(f'{n}: INDEX ERROR')
                 # Меры для стабилизации дрона
                 if telemetry is None:
-                    target = {'x': 0, 'y': 0, 'z': 0, 'mode': 'vel'}
+                    target = {'value': np.array([0.0, 0.0, 0.0]), 'mode': 'vel'}
                 else:
                     print(f'{n}:', telemetry)
-                    target = {'x': telemetry['x'], 'y': telemetry['y'],
-                              'z': telemetry['z'],
-                              'mode': 'pos'}
+                    target = {'value': telemetry, 'mode': 'pos'}
             if target is not None:
                 # Отправка полётной цели и публикация данных в топиках
-                mc_race(pt, n, dt, target, telemetry)
+                mc_race(pt, n, dt, target, telemetry)  # (1)
                 pub_pt[n].publish(pt)
                 targets[n].publish(str(target))
 
