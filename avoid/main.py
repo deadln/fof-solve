@@ -14,6 +14,9 @@ from geographic_msgs.msg import GeoPointStamped
 
 from mavros_msgs.srv import SetMode, CommandBool, CommandVtolTransition, CommandHome
 
+from pygeodesy.geoids import GeoidPGM
+_egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
+
 freq = 20  # Герц, частота посылки управляющих команд аппарату
 node_name = "offboard_node"
 lz = {}
@@ -46,8 +49,8 @@ class CopterController():
 
 
         self.current_waypoint = np.array([0., 0., 0.])
-        self.pose = np.array([0., 0., 0.])
-        self.pose_global = np.array([0., 0., 0.])
+        self.pose = np.array([])
+        self.pose_global = np.array([])
         self.velocity = np.array([0., 0., 0.])
         self.mavros_state = State()
         self.subscribe_on_topics()
@@ -69,10 +72,10 @@ class CopterController():
                 self.follow_waypoint_list()
             elif self.state == "arrival":
                 error = self.move_to_point(self.current_waypoint)
-            if self.state == "takeoff":
-                self.pub_pt.publish(self.pt)
-            else:
-                self.pub_gpt.publish(self.gpt)
+            # if self.state == "takeoff":
+            self.pub_pt.publish(self.pt)
+            # else:
+            #     self.pub_gpt.publish(self.gpt)
 
             rate.sleep()
 
@@ -82,10 +85,11 @@ class CopterController():
         if error < self.arrival_radius:
             self.state = "tookoff"
             self.current_waypoint = self.waypoint_list.pop(0)
-            print('cur waypoint', self.current_waypoint)
+            print('first waypoint', self.current_waypoint)
             # self.current_waypoint = np.array([self.pose_global[0], self.pose_global[1], self.pose_global[2] + 10.])
 
     def move_to_point(self, point):
+        # print('point', point)
         error = self.pose - point
 
         velocity = -self.p_gain * error
@@ -108,8 +112,9 @@ class CopterController():
         return np.linalg.norm(error_h), error_v
 
     def follow_waypoint_list(self):
-        error_h, error_v = self.move_to_point_global(self.current_waypoint)
-        if error_h < self.arrival_radius_global and error_v < self.arrival_radius:
+        error = self.move_to_point(self.current_waypoint)
+        # error_h, error_v = self.move_to_point_global(self.current_waypoint)
+        if error < self.arrival_radius:
             if len(self.waypoint_list) != 0:
                 self.current_waypoint = self.waypoint_list.pop(0)
                 print("\n\nNEXT\n\n")
@@ -136,7 +141,14 @@ class CopterController():
         self.velocity = np.array([velocity.x, velocity.y, velocity.z])
 
     def pose_global_cb(self, msg):
+        if len(self.pose_global) == 0 and len(self.pose) != 0:
+            self.transform_waypoints(np.array([msg.latitude, msg.longitude, msg.altitude]))
+        elif len(self.pose) == 0:
+            self.pose_global = np.array([])
+            return
         self.pose_global = np.array([msg.latitude, msg.longitude, msg.altitude])
+        # Преобразование эллипсоидной высоты в высоту над уровнем моря
+        # self.pose_global = np.array([msg.latitude, msg.longitude, msg.altitude - geoid_height(msg.latitude, msg.longitude)])
         # print('global', self.pose_global)
 
     def state_cb(self, msg):
@@ -195,6 +207,14 @@ class CopterController():
         #     print("DOWN")
 
 
+    def transform_waypoints(self, pose_global):
+        for i in range(len(self.waypoint_list)):
+            delta = enu_vector(pose_global, self.waypoint_list[i])
+            self.waypoint_list[i] = self.pose + delta
+        print("TRANSFORMED WAYPOINTS")
+        print(self.waypoint_list)
+
+
 def service_proxy(path, arg_type, *args, **kwds):
     service = rospy.ServiceProxy(f"/mavros{1}/{path}", arg_type)
     ret = service(*args, **kwds)
@@ -208,15 +228,45 @@ def on_shutdown_cb():
 
 # Получение точек маршрута
 def get_waypoints():
-    with open("../tasks/avoid/gps_mission_2.rt") as f:
+    with open("../tasks/avoid/gps_mission_1.rt") as f:
         s = f.read()
 
     lst = s.split('\n')
     lst = lst[:-1]
     for i in range(len(lst)):
         lst[i] = list(map(float, lst[i].split()))
+        # Преобразование высоты над уровнем моря в эллипсоидную высоту
+        lst[i][2] += geoid_height(lst[i][0], lst[i][1])
     lst = list(map(np.array, lst))
     return lst
+
+
+# преобразование дельты gps в дельту xyz по простейшей формуле (из интернета)
+def enu_vector(g1, g2):
+    n = g2[0] - g1[0]
+    e = g2[1] - g1[1]
+    u = g2[2] - g1[2]
+
+    refLat = (g1[0]+g2[0])/2
+
+    nm = n * 333400 / 3  # deltaNorth * 40008000 / 360
+    em = e * 1001879 * math.cos(math.radians(refLat)) / 9  # deltaEast * 40075160 *cos(refLatitude) / 360
+
+    return [em, nm, u]
+
+
+def geoid_height(lat, lon):
+    """Calculates AMSL to ellipsoid conversion offset.
+    Uses EGM96 data with 5' grid and cubic interpolation.
+    The value returned can help you convert from meters
+    above mean sea level (AMSL) to meters above
+    the WGS84 ellipsoid.
+
+    If you want to go from AMSL to ellipsoid height, add the value.
+
+    To go from ellipsoid height to AMSL, subtract this value.
+    """
+    return _egm96.height(lat, lon)
 
 
 # ROS/Mavros работают в системе координат ENU(Восток-Север-Вверх), автопилот px4 и протокол сообщений Mavlink используют систему координат NED(Север-Восток-Вниз)
