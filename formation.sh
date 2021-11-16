@@ -5,7 +5,7 @@ pkg="formation"
 
 source params1.sh
 
-AIRSIM_PKG=$pkg ./start.sh -n $num --pose_list places.txt --ref_point 0,-72,0.1 $@
+AIRSIM_PKG=$pkg ./start.sh -n $num --pose_list places.txt --ref_point 0,-72,0.1 -f EKF2_REF_SET=1 $@
 
 if [ $mode == "prof" ]; then
   suf=""
