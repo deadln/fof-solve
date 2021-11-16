@@ -28,8 +28,10 @@ class CopterController():
         # создаем топики, для публикации управляющих значений:
         self.pub_pt = rospy.Publisher(f"/mavros{1}/setpoint_raw/local", PositionTarget, queue_size=10)
         self.pub_gpt = rospy.Publisher(f"/mavros{1}/setpoint_raw/global", GlobalPositionTarget, queue_size=10)
+        # Объект для управления по локальной системе координат
         self.pt = PositionTarget()
         self.pt.coordinate_frame = self.pt.FRAME_LOCAL_NED
+        # Объект для управления по глобальной системе координат
         self.gpt = GlobalPositionTarget()
         self.gpt.coordinate_frame = self.gpt.FRAME_GLOBAL_INT
 
@@ -37,14 +39,10 @@ class CopterController():
         self.dt = 0
 
         # params
-        self.p_gain = 2
+        self.p_gain = 2  # Множитель вектора скорости для приближения к точке
         self.max_velocity = 5
         self.arrival_radius = 0.6
         self.arrival_radius_global = 0.0001
-        # self.waypoint_list = [np.array([106., 509., 10.]), np.array([5., 5., 100.]), np.array([100., 100., 100.]),
-        #                       np.array([0., 0., 5.])]
-        # self.waypoint_list = [np.array([0., 0., 332.]), np.array([1., 1., 332.]),
-        #                       np.array([1.0045822, 1.0009613, 232.])]
         self.waypoint_list = get_waypoints()
 
 
@@ -59,8 +57,6 @@ class CopterController():
         # цикл управления
         rate = rospy.Rate(freq)
         while not rospy.is_shutdown():
-            # print('state:', self.state)
-            # print('cur waypoint', self.current_waypoint)
             self.dt = time.time() - self.t0
             self.set_mode("OFFBOARD")
             # управляем аппаратом
@@ -72,10 +68,7 @@ class CopterController():
                 self.follow_waypoint_list()
             elif self.state == "arrival":
                 error = self.move_to_point(self.current_waypoint)
-            # if self.state == "takeoff":
             self.pub_pt.publish(self.pt)
-            # else:
-            #     self.pub_gpt.publish(self.gpt)
 
             rate.sleep()
 
@@ -86,10 +79,8 @@ class CopterController():
             self.state = "tookoff"
             self.current_waypoint = self.waypoint_list.pop(0)
             print('first waypoint', self.current_waypoint)
-            # self.current_waypoint = np.array([self.pose_global[0], self.pose_global[1], self.pose_global[2] + 10.])
 
     def move_to_point(self, point):
-        # print('point', point)
         error = self.pose - point
 
         velocity = -self.p_gain * error
@@ -99,16 +90,12 @@ class CopterController():
         self.set_vel(velocity)
         return np.linalg.norm(error)
 
+    # Перемещение к точке по глобальным координатам
     def move_to_point_global(self, point):
         error_h = np.array([self.pose_global[0] - point[0], self.pose_global[1] - point[1]])
         error_v = abs(self.pose_global[2] - point[2])
 
         self.set_pos_global(point)
-        # velocity = -self.p_gain * error
-        # velocity_norm = np.linalg.norm(velocity)
-        # if velocity_norm > self.max_velocity:
-        #     velocity = velocity / velocity_norm * self.max_velocity
-        # self.set_vel(velocity)
         return np.linalg.norm(error_h), error_v
 
     def follow_waypoint_list(self):
@@ -189,9 +176,9 @@ class CopterController():
         # Высота, направление вверх
         self.pt.position.z = pose[2]
 
+    # Управление по точкам, глобальная система координат.
     def set_pos_global(self, pose):
         self.gpt.type_mask = self.gpt.IGNORE_VX | self.gpt.IGNORE_VY | self.gpt.IGNORE_VZ | self.gpt.IGNORE_AFX | self.gpt.IGNORE_AFY | self.gpt.IGNORE_AFZ | self.gpt.IGNORE_YAW | self.gpt.IGNORE_YAW_RATE
-        # self.gpt.type_mask = self.gpt.IGNORE_VX | self.gpt.IGNORE_VY | self.gpt.IGNORE_AFX | self.gpt.IGNORE_AFY | self.gpt.IGNORE_AFZ | self.gpt.IGNORE_YAW | self.gpt.IGNORE_YAW_RATE
         # Смещение по широте
         self.gpt.latitude = pose[0]
         # Смещение по долготе
@@ -199,14 +186,7 @@ class CopterController():
         # Высота, направление вверх
         self.gpt.altitude = pose[2]
 
-        # if self.dt % 10 < 5:
-        #     self.gpt.velocity.z = 5
-        #     print("UP")
-        # else:
-        #     self.gpt.velocity.z = -5
-        #     print("DOWN")
-
-
+    # Преобразование точек маршрута из глобальной системы координат в локальную
     def transform_waypoints(self, pose_global):
         for i in range(len(self.waypoint_list)):
             delta = enu_vector(pose_global, self.waypoint_list[i])
