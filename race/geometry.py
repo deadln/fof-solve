@@ -1,4 +1,6 @@
 import math
+
+import numpy
 import numpy as np
 
 class Point:
@@ -83,57 +85,41 @@ class Point:
 class Line:
     '''Line in 3d(float)'''
 
-    def __init__(self, a, b):
+    def __init__(self, a: numpy.array, b: numpy.array):
         '''get line from two points'''
-        self.p0 = Point(a.x, a.y, a.z)
-        self.p1 = Point(b.x, b.y, b.z)
+        self.p0 = np.array(a)
+        self.p1 = np.array(b)
 
-    def get_point_dist(self, other_point):
+    def get_point_dist(self, other_point: numpy.array) -> float:
         '''get float distance from this line to other point'''
-        tmp1 = Point(self.p1.x, self.p1.y, self.p1.z)
-        tmp2 = Point(other_point.x, other_point.y, other_point.z)
-        tmp1.sub_point(self.p0)
-        tmp2.sub_point(self.p0)
-        sq = tmp1.get_cp_len(tmp2)
-        return sq / self.p1.distance(self.p0)
+        cp = np.cross(other_point - self.p0, self.p1 - self.p0)
+        cp = math.sqrt(np.dot(cp, cp))
+        return cp / math.sqrt(np.dot(self.p1 - self.p0, self.p1 - self.p0))
 
-    def pr_point(self, other_point):
-        tmp1 = Point(self.p1.x, self.p1.y, self.p1.z)
-        tmp2 = Point(other_point.x, other_point.y, other_point.z)
-        tmp1.sub_point(self.p0)
-        tmp2.sub_point(self.p0)
-        nv = tmp1.get_cp(tmp2)
-        nvv = tmp1.get_cp(nv)
-        nvv.normalize_vector()
-        k = self.get_point_dist(other_point)
-        nvv.mul_vector(k)
-        ans = Point(other_point.x, other_point.y, other_point.z)
-        ans.add_point(nvv)
+    def pr_point(self, other_point: numpy.array) -> numpy.array:
+        vec_proj = self.p1 - self.p0
+        vec_proj_wanted_lgt = np.dot(other_point - self.p0, vec_proj) / math.sqrt(np.dot(vec_proj, vec_proj))
+        vec_proj_old_lgt = math.sqrt(np.dot(vec_proj, vec_proj))
+        vec_proj = vec_proj * (vec_proj_wanted_lgt // vec_proj_old_lgt)
+        ans = self.p0 + vec_proj
         return ans
 
 
 class Surface:
     '''surface in 3d'''
 
-    def __init__(self, a, b, c):
-        self.p0 = Point(a.x, a.y, a.z)
-        self.p1 = Point(b.x, b.y, b.z)
-        tmp1 = Point(b.x, b.y, b.z)
-        self.p2 = Point(c.x, c.y, c.z)
-        tmp2 = Point(c.x, c.y, c.z)
+    def __init__(self, a: numpy.array, b: numpy.array, c: numpy.array) -> numpy.array:
+        self.p0 = np.array(a)
+        self.p1 = np.array(b)
+        self.p2 = np.array(c)
+        self.nv = np.cross(self.p1 - self.p0, self.p2 - self.p0)
 
-        tmp1.sub_point(self.p0)
-        tmp2.sub_point(self.p0)
-
-        self.nv = tmp1.get_cp(tmp2)
-        self.nv.normalize_vector()
-
-        self.d = -(self.nv.x * a.x + self.nv.y * a.y + self.nv.z * a.z)
-
-    def substitute_point(self, a):
+    def substitute_point(self, a: numpy.array) -> numpy.array:
         '''substitute point to surface equation'''
-        return self.nv.x * a.x + self.nv.y * a.y + self.nv.z * a.z + self.d
+        return np.dot(a - self.p0, self.nv)
 
     def get_point_dist(self, other_point):
         '''get distance to point from this surface'''
-        return math.fabs(self.substitute_point(other_point))
+        return math.fabs(self.substitute_point(other_point) / math.sqrt(np.dot(self.nv, self.nv)))
+
+
