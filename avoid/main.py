@@ -11,6 +11,7 @@ from sensor_msgs.msg import NavSatFix
 from geometry_msgs.msg import TwistStamped, PoseStamped
 from mavros_msgs.msg import PositionTarget, State, ExtendedState, GlobalPositionTarget
 from geographic_msgs.msg import GeoPointStamped
+from std_msgs.msg import String
 
 from mavros_msgs.srv import SetMode, CommandBool, CommandVtolTransition, CommandHome
 
@@ -25,6 +26,8 @@ lz = {}
 class CopterController():
     def __init__(self):
         self.state = "disarm"
+        # Количество аппаратов
+        self.instances = 1
         # создаем топики, для публикации управляющих значений:
         self.pub_pt = rospy.Publisher(f"/mavros{1}/setpoint_raw/local", PositionTarget, queue_size=10)
         self.pub_gpt = rospy.Publisher(f"/mavros{1}/setpoint_raw/global", GlobalPositionTarget, queue_size=10)
@@ -40,8 +43,9 @@ class CopterController():
 
         # params
         self.p_gain = 2  # Множитель вектора скорости для приближения к точке
-        self.max_velocity = 5
-        self.arrival_radius = 0.6
+        self.max_velocity = 10
+        self.min_velocity = 1
+        self.arrival_radius = 2
         self.arrival_radius_global = 0.0001
         self.waypoint_list = get_waypoints()
 
@@ -51,6 +55,7 @@ class CopterController():
         self.pose_global = np.array([])
         self.velocity = np.array([0., 0., 0.])
         self.mavros_state = State()
+        self.obstacles = {}
         self.subscribe_on_topics()
 
     def offboard_loop(self):
@@ -87,6 +92,8 @@ class CopterController():
         velocity_norm = np.linalg.norm(velocity)
         if velocity_norm > self.max_velocity:
             velocity = velocity / velocity_norm * self.max_velocity
+        elif velocity_norm < self.min_velocity:
+            velocity = velocity / velocity_norm * self.min_velocity
         self.set_vel(velocity)
         return np.linalg.norm(error)
 
@@ -117,6 +124,8 @@ class CopterController():
         rospy.Subscriber("/mavros1/global_position/global", NavSatFix, self.pose_global_cb)
         # состояние
         rospy.Subscriber("/mavros1/state", State, self.state_cb)
+        # Радар препятствий
+        rospy.Subscriber("/ca_radar/rel_obstacles", String, self.radar_cb)
 
     def pose_cb(self, msg):
         pose = msg.pose.position
@@ -140,6 +149,15 @@ class CopterController():
 
     def state_cb(self, msg):
         self.mavros_state = msg
+
+    def radar_cb(self, msg):
+        for i in range(1, self.instances+1):
+            self.obstacles[i] = []
+        msg = str(msg.data).split()
+        for i in range(1, len(msg), 4):
+            self.obstacles[int(msg[i])].append(np.array(list(map(float, [msg[i+1], msg[i+2], msg[i+3]]))))
+        if len(self.obstacles[1]) > 0:
+            print(self.obstacles)
 
     def arming(self, to_arm):
         if self.dt < 10:
