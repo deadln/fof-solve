@@ -108,7 +108,7 @@ class Line:
 class Surface:
     '''surface in 3d'''
 
-    def __init__(self, a: numpy.array, b: numpy.array, c: numpy.array) -> numpy.array:
+    def __init__(self, a: numpy.array, b: numpy.array, c: numpy.array):
         self.p0 = np.array(a)
         self.p1 = np.array(b)
         self.p2 = np.array(c)
@@ -118,6 +118,14 @@ class Surface:
         '''substitute point to surface equation'''
         return np.dot(a - self.p0, self.nv)
 
-    def get_point_dist(self, other_point):
+    def get_point_dist(self, other_point: numpy.array):
         '''get distance to point from this surface'''
         return math.fabs(self.substitute_point(other_point) / math.sqrt(np.dot(self.nv, self.nv)))
+
+    def pr_point(self, other_point: numpy.array) -> numpy.array:
+        vec_to_plane = self.nv * -1.0
+        nv_lgt = math.sqrt(np.dot(self.nv, self.nv))
+        dist = self.get_point_dist(other_point)
+        vec_to_plane = vec_to_plane * dist
+        vec_to_plane = vec_to_plane / nv_lgt
+        return other_point + vec_to_plane
