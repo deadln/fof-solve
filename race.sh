@@ -5,7 +5,7 @@ pkg="race"
 
 source params1.sh
 
-AIRSIM_PKG=$pkg ./start.sh -n $num --pose_list places.txt --ref_point 0,0,0.5 $@
+AIRSIM_PKG=$pkg ./start.sh -n $num --pose_list places.txt --ref_point 0,0,0.5 -f EKF2_REF_SET=1 $@
 
 if [ $mode == "prof" ]; then
   suf=""
