@@ -45,13 +45,15 @@ class CopterController():
 
         # params
         self.p_gain = 2  # Множитель вектора скорости для приближения к точке
-        self.max_velocity = 10.0
+        self.max_velocity = 6.0
         self.min_velocity = 0.3
+        self.approach_velocity = 0.4
         self.arrival_radius = 2.0
         self.arrival_radius_global = 0.0001
         self.waypoint_list = get_waypoints()
         self.AVOID_RADIUS = 15.0  # Радиус обнаружения "валидных" препятствий
-        self.MAX_AVOID_SPEED = 5.0
+        self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
+        self.TRAJECTORY_CORRECTION = 1.4  # Множитель вектора скорости для корректирования траектории
 
 
         self.current_waypoint = np.array([0., 0., 0.])
@@ -102,8 +104,10 @@ class CopterController():
         velocity_norm = np.linalg.norm(velocity)
         if velocity_norm > self.max_velocity:
             velocity = velocity / velocity_norm * self.max_velocity
-        elif velocity_norm < self.min_velocity:
-            velocity = velocity / velocity_norm * self.min_velocity
+        # elif np.linalg.norm(error) < 5.0:
+        #     velocity = velocity / velocity_norm * self.approach_velocity
+        # elif velocity_norm < self.min_velocity:
+        #     velocity = velocity / velocity_norm * self.min_velocity
 
         # Добавление вектора для уклонения от препятствий
         velocity += self.get_avoid_velocity()
@@ -113,6 +117,7 @@ class CopterController():
         self.set_vel(velocity)
         return np.linalg.norm(error)
 
+    # Полёт к точке без коррекций
     def move_to_point_straight(self, point):
         error = self.pose - point
 
@@ -137,7 +142,6 @@ class CopterController():
 
     def follow_waypoint_list(self):
         error = self.move_to_point(self.current_waypoint)
-        # error_h, error_v = self.move_to_point_global(self.current_waypoint)
         if error < self.arrival_radius:
             if len(self.waypoint_list) != 0:
                 self.previous_waypoint = np.array(self.current_waypoint)
@@ -147,6 +151,7 @@ class CopterController():
                 print('cur waypoint', self.current_waypoint)
             else:
                 self.state = "arrival"
+                print("FINISH")
 
     def subscribe_on_topics(self):
         # локальная система координат, точка отсчета = место включения аппарата
@@ -244,7 +249,7 @@ class CopterController():
         print("TRANSFORMED WAYPOINTS")
         print(self.waypoint_list)
 
-    # Получение вектора для ухлда от препятствий
+    # Получение вектора для ухода от препятствий
     def get_avoid_velocity(self):
         # return np.array([0, 0, 0])
         self.surface = Surface(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
@@ -253,18 +258,30 @@ class CopterController():
         if len(valid_obstacles) == 0:
             return res
         for obstacle in valid_obstacles:
-            res += -(obstacle / np.linalg.norm(obstacle)) * (self.MAX_AVOID_SPEED * (self.AVOID_RADIUS / np.linalg.norm(obstacle)))
+            res += -(obstacle / np.linalg.norm(obstacle)) * (self.AVOID_RADIUS / np.linalg.norm(obstacle))
         res = self.surface.pr_point(self.pose + res) - self.pose
-        if np.linalg.norm(res) > 5:
+        if np.linalg.norm(res) > self.MAX_AVOID_SPEED:
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
-        print(res)
+        # print(res)
 
         return res
 
     def get_correction_velocity(self):
-        return np.array([0, 0, 0])
+        if np.linalg.norm(self.pose - self.current_waypoint) < 7:
+            return np.array([0.0, 0.0, 0.0])
+        error = self.route_line.get_point_dist(self.pose)
+        if error > 5.0:
+            print("CRITICAL ROUTE ERROR", self.dt)
+        res = (self.route_line.pr_point(self.pose) - self.pose) * self.TRAJECTORY_CORRECTION
+        if error > 5.0:
+            res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED * 2
+        elif np.linalg.norm(res) > self.MAX_AVOID_SPEED:
+            res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
+        # print("ROUTE CORRECTION", res)
+        return res
 
-    def filter_obstacles(self):  # TODO: добавить фильтрацию дронов, находящихся сзади
+
+    def filter_obstacles(self):
         res = []
         for vect in self.obstacles[1]:
             pose = self.pose + vect
