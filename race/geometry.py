@@ -123,9 +123,11 @@ class Surface:
         return math.fabs(self.substitute_point(other_point) / math.sqrt(np.dot(self.nv, self.nv)))
 
     def pr_point(self, other_point: numpy.array) -> numpy.array:
-        vec_to_plane = self.nv * -1.0
+        vec_to_plane = self.nv
         nv_lgt = math.sqrt(np.dot(self.nv, self.nv))
         dist = self.get_point_dist(other_point)
         vec_to_plane = vec_to_plane * dist
         vec_to_plane = vec_to_plane / nv_lgt
+        if self.substitute_point(other_point) > 0:
+            vec_to_plane = vec_to_plane * -1
         return other_point + vec_to_plane
