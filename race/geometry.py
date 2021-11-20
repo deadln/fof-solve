@@ -100,7 +100,7 @@ class Line:
         vec_proj = self.p1 - self.p0
         vec_proj_wanted_lgt = np.dot(other_point - self.p0, vec_proj) / math.sqrt(np.dot(vec_proj, vec_proj))
         vec_proj_old_lgt = math.sqrt(np.dot(vec_proj, vec_proj))
-        vec_proj = vec_proj * (vec_proj_wanted_lgt // vec_proj_old_lgt)
+        vec_proj = vec_proj * (vec_proj_wanted_lgt / vec_proj_old_lgt)
         ans = self.p0 + vec_proj
         return ans
 
@@ -121,5 +121,3 @@ class Surface:
     def get_point_dist(self, other_point):
         '''get distance to point from this surface'''
         return math.fabs(self.substitute_point(other_point) / math.sqrt(np.dot(self.nv, self.nv)))
-
-
