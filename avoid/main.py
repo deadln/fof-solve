@@ -18,6 +18,8 @@ from mavros_msgs.srv import SetMode, CommandBool, CommandVtolTransition, Command
 from pygeodesy.geoids import GeoidPGM
 _egm96 = GeoidPGM('/usr/share/GeographicLib/geoids/egm96-5.pgm', kind=-3)
 
+from geometry import *
+
 freq = 20  # Герц, частота посылки управляющих команд аппарату
 node_name = "offboard_node"
 lz = {}
@@ -43,19 +45,24 @@ class CopterController():
 
         # params
         self.p_gain = 2  # Множитель вектора скорости для приближения к точке
-        self.max_velocity = 10
-        self.min_velocity = 1
-        self.arrival_radius = 2
+        self.max_velocity = 10.0
+        self.min_velocity = 0.3
+        self.arrival_radius = 2.0
         self.arrival_radius_global = 0.0001
         self.waypoint_list = get_waypoints()
+        self.AVOID_RADIUS = 15.0  # Радиус обнаружения "валидных" препятствий
+        self.MAX_AVOID_SPEED = 5.0
 
 
         self.current_waypoint = np.array([0., 0., 0.])
+        self.previous_waypoint = np.array([0., 0., 0.])
         self.pose = np.array([])
         self.pose_global = np.array([])
         self.velocity = np.array([0., 0., 0.])
         self.mavros_state = State()
         self.obstacles = {}
+        self.route_line = Line(np.array([0, 0, 0]), np.array([0, 0, 0]))  # Линия от предыдущей точке к следующей
+        self.surface = Surface(np.array([0, 0, 0]), np.array([0, 0, 0]))  # Плоскость, перпендикулятрная линии маршрута
         self.subscribe_on_topics()
 
     def offboard_loop(self):
@@ -79,21 +86,44 @@ class CopterController():
 
     # взлет коптера
     def takeoff(self):
-        error = self.move_to_point(self.current_waypoint)
+        error = self.move_to_point_straight(self.current_waypoint)
         if error < self.arrival_radius:
             self.state = "tookoff"
+            self.previous_waypoint = np.array(self.pose)
             self.current_waypoint = self.waypoint_list.pop(0)
+            self.route_line = Line(self.previous_waypoint, self.current_waypoint)
             print('first waypoint', self.current_waypoint)
 
     def move_to_point(self, point):
         error = self.pose - point
 
+        # Вектор к точке
         velocity = -self.p_gain * error
         velocity_norm = np.linalg.norm(velocity)
         if velocity_norm > self.max_velocity:
             velocity = velocity / velocity_norm * self.max_velocity
         elif velocity_norm < self.min_velocity:
             velocity = velocity / velocity_norm * self.min_velocity
+
+        # Добавление вектора для уклонения от препятствий
+        velocity += self.get_avoid_velocity()
+        # Добавление вектора для поддержания траектории маршрута
+        velocity += self.get_correction_velocity()
+
+        self.set_vel(velocity)
+        return np.linalg.norm(error)
+
+    def move_to_point_straight(self, point):
+        error = self.pose - point
+
+        # Вектор к точке
+        velocity = -self.p_gain * error
+        velocity_norm = np.linalg.norm(velocity)
+        if velocity_norm > self.max_velocity:
+            velocity = velocity / velocity_norm * self.max_velocity
+        elif velocity_norm < self.min_velocity:
+            velocity = velocity / velocity_norm * self.min_velocity
+
         self.set_vel(velocity)
         return np.linalg.norm(error)
 
@@ -110,7 +140,9 @@ class CopterController():
         # error_h, error_v = self.move_to_point_global(self.current_waypoint)
         if error < self.arrival_radius:
             if len(self.waypoint_list) != 0:
+                self.previous_waypoint = np.array(self.current_waypoint)
                 self.current_waypoint = self.waypoint_list.pop(0)
+                self.route_line = Line(self.previous_waypoint, self.current_waypoint)
                 print("\n\nNEXT\n\n")
                 print('cur waypoint', self.current_waypoint)
             else:
@@ -156,8 +188,8 @@ class CopterController():
         msg = str(msg.data).split()
         for i in range(1, len(msg), 4):
             self.obstacles[int(msg[i])].append(np.array(list(map(float, [msg[i+1], msg[i+2], msg[i+3]]))))
-        if len(self.obstacles[1]) > 0:
-            print(self.obstacles)
+        # if len(self.obstacles[1]) > 0:
+        #     print(self.obstacles)
 
     def arming(self, to_arm):
         if self.dt < 10:
@@ -167,7 +199,7 @@ class CopterController():
                 service_proxy("cmd/arming", CommandBool, to_arm)
         if self.dt > 10:
             self.state = "takeoff"
-            self.current_waypoint = np.array([self.pose[0], self.pose[1], self.pose[2] + 20.])
+            self.current_waypoint = np.array([self.pose[0], self.pose[1], self.pose[2] + 10.])
 
     def set_mode(self, new_mode):
         if self.mavros_state is not None and self.mavros_state.mode != new_mode:
@@ -211,6 +243,36 @@ class CopterController():
             self.waypoint_list[i] = self.pose + delta
         print("TRANSFORMED WAYPOINTS")
         print(self.waypoint_list)
+
+    # Получение вектора для ухлда от препятствий
+    def get_avoid_velocity(self):
+        # return np.array([0, 0, 0])
+        self.surface = Surface(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
+        valid_obstacles = self.filter_obstacles()
+        res = np.array([0.0, 0.0, 0.0])
+        if len(valid_obstacles) == 0:
+            return res
+        for obstacle in valid_obstacles:
+            res += -(obstacle / np.linalg.norm(obstacle)) * (self.MAX_AVOID_SPEED * (self.AVOID_RADIUS / np.linalg.norm(obstacle)))
+        res = self.surface.pr_point(self.pose + res) - self.pose
+        if np.linalg.norm(res) > 5:
+            res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
+        print(res)
+
+        return res
+
+    def get_correction_velocity(self):
+        return np.array([0, 0, 0])
+
+    def filter_obstacles(self):  # TODO: добавить фильтрацию дронов, находящихся сзади
+        res = []
+        for vect in self.obstacles[1]:
+            pose = self.pose + vect
+            if self.surface.substitute_point(pose) >= 0 and np.linalg.norm(vect) <= self.AVOID_RADIUS or \
+                    self.surface.substitute_point(pose) < 0 and self.surface.get_point_dist(pose) <= 5 and \
+                    np.linalg.norm(vect) <= 5:
+                res.append(np.array(vect))
+        return res
 
 
 def service_proxy(path, arg_type, *args, **kwds):
