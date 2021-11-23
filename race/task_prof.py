@@ -61,7 +61,6 @@ LZ_IN_ROW = 8
 
 # Функция для определения аномальной телеметрии
 def is_anomaly(telemetry):
-    # return -0.1 < telemetry['x'] < 0.1 and -0.1 < telemetry['y'] < 0.1
     return -0.1 < telemetry[0] < 0.1 and -0.1 < telemetry[1] < 0.1
 
 
@@ -80,7 +79,6 @@ def to_points_list(points_string):
     res = {'name': lst[1], 'points': []}
     i = 2
     while i < len(lst):
-        # res['points'].append({'x': float(lst[i]), 'y': float(lst[i + 1]), 'z': float(lst[i + 2])})
         res['points'].append(np.array([float(lst[i]), float(lst[i + 1]), float(lst[i + 2])]))
         i += 3
     return res
@@ -96,15 +94,6 @@ def to_holes_list(holes_string):
             {'x': float(lst[i]), 'y': float(lst[i + 1]), 'w': float(lst[i + 2]), 'h': float(lst[i + 3]), 'drones': 0})
         i += 4
     return res
-
-
-# Преобразование словаря точки в объект Point
-def dict_to_point(voc):
-    return Point(voc['x'], voc['y'], voc['z'])
-
-# Преобразование массива numpy точки в объект Point
-def array_to_point(voc):
-    return Point(voc[0], voc[1], voc[2])
 
 
 # Получение центральной точки препятствия в координатах симулятора
@@ -160,7 +149,7 @@ def get_distance(p1, p2):
 # Получить расстояние до линии, которая проецируется из выбранного дроном отверстия перпендикулярно стене
 def get_current_line_distance(n, telemetry):
     return walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']]['line'].get_point_dist(
-        Point(telemetry[0], telemetry[1], telemetry[2]))
+        telemetry)
 
 
 ## Функции связанные с полётом и ROS
@@ -295,10 +284,10 @@ def get_turn_point(n, telemetry):  # Номер коптера и его пол�
     # TODO: оптимизировать рассчёт поворотных линий: рассчитывать их один раз, а затем для каждого коптера брать готовую
     global turn_point_counter  # Нужно будет удалить
     if n in turn_lines.keys():  # Если для коптера уже есть поворотная линия
-        pr_point = turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
+        pr_point = turn_lines[n].pr_point(telemetry)
         if get_distance(pr_point, turn_points[n]) > TURN_RADIUS:
             return turn_points[n]
-        return turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
+        return turn_lines[n].pr_point(telemetry)
     # Получаем точку центральной линии на повороте
     cur_cent_point = centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num']]
     v1 = get_norm_vect(cur_cent_point,
@@ -306,9 +295,9 @@ def get_turn_point(n, telemetry):  # Номер коптера и его пол�
     v2 = get_norm_vect(cur_cent_point,
                        centrals[current_obstacle[n]['wall_num']]['points'][current_obstacle[n]['point_num'] - 1])
     turn_point = np.array(cur_cent_point)
-    v1_p = array_to_point(v1)
-    v2_p = array_to_point(v2)
-    vect_cp = v1_p.get_cp(v2_p).get_array()  # Вектор для построения линии поворота
+    v1_p = np.array(v1)
+    v2_p = np.array(v2)
+    vect_cp = np.cross(v1_p, v2_p)  # Вектор для построения линии поворота
     # Получение точки для построение линии поворота. Смещение точки поворота во внутрь
     turn_point += (v1 + v2) * TURN_POINT_BIAS
     # Если лабиринт идёт вниз
@@ -318,13 +307,13 @@ def get_turn_point(n, telemetry):  # Номер коптера и его пол�
     line_point = turn_point + vect_cp
 
 
-    print('TURN', array_to_point(turn_point), array_to_point(line_point))
+    print('TURN', turn_point, line_point)
     turn_points[n] = turn_point
-    turn_lines[n] = Line(array_to_point(turn_point), array_to_point(line_point))
-    pr_point = turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
+    turn_lines[n] = Line(turn_point, line_point)
+    pr_point = turn_lines[n].pr_point(telemetry)
     if get_distance(pr_point, turn_points[n]) > TURN_RADIUS:
         return turn_points[n]
-    return turn_lines[n].pr_point(array_to_point(telemetry)).get_array()
+    return turn_lines[n].pr_point(telemetry)
 
 
 def get_telemetry(n):
@@ -379,7 +368,7 @@ def is_good_hole(hole):  # TODO: пересмотреть критерии по�
 
 def is_in_projection(n, telemetry):
     hole = walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']]
-    vect_to_line = hole['line'].pr_point(array_to_point(telemetry)).get_array()
+    vect_to_line = hole['line'].pr_point(telemetry)
     vect_to_line -= telemetry
     flat_vect = {'x': math.hypot(vect_to_line[0], vect_to_line[1]), 'y': abs(vect_to_line[2])}
     if flat_vect['x'] < hole['w'] / 2 - LINE_EPS and flat_vect['y'] < hole['h'] / 2 - LINE_EPS:
@@ -445,7 +434,7 @@ def set_target(n, telemetry):
 
             # Если дрон в проекции отверстия, то лететь на постоянной скорости
             if is_in_projection(n, telemetry) and \
-                    walls[current_obstacle[n]['wall_num']]['surface'].get_point_dist(array_to_point(telemetry)
+                    walls[current_obstacle[n]['wall_num']]['surface'].get_point_dist(telemetry
                                                                                      ) < FULL_THROTTLE_DISTANCE:
                 # Смещаем цель полёта вперёд, за стену
                 target['value'] -= wall_vect * TARGET_POINT_BIAS * 2
@@ -516,30 +505,30 @@ def offboard_loop():  # Запускается один раз
                 for hole in wall['holes']:                                     # кусок
                     holes.append(obstacle_to_coords(central['points'], hole))  # кода
                 # Нахождение трёх точек для плоскости стены
-                p1 = array_to_point(central['points'][-1])
-                p2 = array_to_point(central['points'][-1])
-                p2.add_point(Point(0, 0, 1))
-                p3 = array_to_point(central['points'][-1])
+                p1 = np.array(central['points'][-1])
+                p2 = np.array(central['points'][-1])
+                p2 += np.array([0, 0, 1])
+                p3 = np.array(central['points'][-1])
                 norm_vect = get_wall_norm_vect(central['points'])
                 norm_vect = rotate_vect_xy(norm_vect)
-                p3.add_point(array_to_point(norm_vect))
+                p3 += norm_vect
                 # Смещение точек плоскости немного вперёд
                 norm_vect = get_wall_norm_vect(central['points'])
                 norm_vect *= TARGET_SURFACE_BIAS
-                norm_vect = array_to_point(norm_vect)
-                p1.add_point(norm_vect)
-                p2.add_point(norm_vect)
-                p3.add_point(norm_vect)
+                norm_vect = np.array(norm_vect)
+                p1 += norm_vect
+                p2 += norm_vect
+                p3 += norm_vect
                 # Создание плоскости и назначение признака того что дрон преодолел плоскость
                 wall['surface'] = Surface(p1, p2, p3)
-                wall['surface_sign'] = sign(wall['surface'].substitute_point(array_to_point(central['points'][-1])))
+                wall['surface_sign'] = sign(wall['surface'].substitute_point(central['points'][-1]))
                 # Построение прямой, перпендикулярной стене, для каждой точки центра отверстия, а также инвалидация
                 # слишком маленьких отверстий
                 for i in range(len(wall['holes'])):
                     if is_good_hole(wall['holes'][i]):
-                        p1 = array_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
-                        p2 = array_to_point(obstacle_to_coords(central['points'], wall['holes'][i]))
-                        p2.add_point(array_to_point(get_wall_norm_vect(central['points'])))
+                        p1 = obstacle_to_coords(central['points'], wall['holes'][i])
+                        p2 = obstacle_to_coords(central['points'], wall['holes'][i])
+                        p2 += get_wall_norm_vect(central['points'])
                         wall['holes'][i]['line'] = Line(p1, p2)
                     else:
                         wall['holes'][i]['drones'] = INF  # Эта строчка затащила хакатон
@@ -574,7 +563,7 @@ def offboard_loop():  # Запускается один раз
                     raise IndexError
 
                 target = set_target(n, telemetry)
-                pos = array_to_point(telemetry)
+                pos = np.array(telemetry)
 
                 # Если назначена посадка
                 if current_obstacle[n]['state'] == 'landing':
@@ -594,7 +583,7 @@ def offboard_loop():  # Запускается один раз
                 # Если достигнута окрестность центра поворота
                 elif current_obstacle[n]['point_num'] < len(
                         centrals[current_obstacle[n]['wall_num']]['points']) - 1 and \
-                        turn_lines[n].get_point_dist(array_to_point(telemetry)) < TURN_EPS:
+                        turn_lines[n].get_point_dist(telemetry) < TURN_EPS:
                     print(f'{n}:NEXT POINT')
                     turn_lines.pop(n, None)
                     current_obstacle[n]['point_num'] += 1
