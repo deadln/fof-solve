@@ -7,6 +7,8 @@ import sys
 import math
 import random
 import numpy as np
+import airsim
+import os
 
 from sensor_msgs.msg import NavSatFix
 from geometry_msgs.msg import TwistStamped, PoseStamped
@@ -29,6 +31,7 @@ current_track_data = {}
 # Списки центральных линий и стен
 centrals = []
 walls = []
+airsim_client = airsim.MultirotorClient()
 
 current_obstacle = {}  # Словарь с текущими препятствиями для отдельных аппаратов
 lz = {}  # Словарь с местами "посадки" для дронов, пролетевших трассу
@@ -150,6 +153,27 @@ def get_distance(p1, p2):
 def get_current_line_distance(n, telemetry):
     return walls[current_obstacle[n]['wall_num']]['holes'][current_obstacle[n]['hole_num']]['line'].get_point_dist(
         telemetry)
+
+# Функция получения изображения
+def get_image(instance_num, image_type='normal'):  # Номер дрона с нуля, тип изображения (normal, depth, segment)
+    instance_num = str(instance_num)
+    if image_type == 'normal':
+        image_type = airsim.ImageType.Scene
+    elif image_type == 'depth':
+        image_type = airsim.ImageType.DepthVis
+    elif image_type == 'segment':
+        image_type = airsim.ImageType.Segmentation
+
+    responses = airsim_client.simGetImages([airsim.ImageRequest(instance_num, image_type, False, False)])
+    response = responses[0]
+
+    # Получаем numpy array
+    img1d = np.frombuffer(response.image_data_uint8, dtype=np.uint8)
+    # Переформируем в 4-канальный array H X W X 4
+    img_rgb = img1d.reshape(response.height, response.width, 3)
+    return img_rgb
+    # Созранить в png
+    # airsim.write_png(os.path.normpath('img.png'), img_rgb)
 
 
 ## Функции связанные с полётом и ROS
