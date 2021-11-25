@@ -9,6 +9,12 @@
                     "SensorType": 1,
                     "Enabled": true,
                     "PressureFactorSigma": 0.0001825
+                },
+                "Gps": {
+                    "SensorType": 3,
+                    "Enabled" : true,
+                    "UpdateLatency": 0,
+                    "UpdateFrequency": 20
                 }
             },
             "Parameters": {
