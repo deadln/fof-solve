@@ -22,17 +22,19 @@ from geometry import *
 
 freq = 20  # Герц, частота посылки управляющих команд аппарату
 node_name = "offboard_node"
-lz = {}
+# Количество аппаратов
+INSTANCES_NUM = 3
+
+obstacles = {}
 
 
 class CopterController():
-    def __init__(self):
+    def __init__(self, instance_num):
         self.state = "disarm"
-        # Количество аппаратов
-        self.instances = 1
+        self.instance_num = instance_num
         # создаем топики, для публикации управляющих значений:
-        self.pub_pt = rospy.Publisher(f"/mavros{1}/setpoint_raw/local", PositionTarget, queue_size=10)
-        self.pub_gpt = rospy.Publisher(f"/mavros{1}/setpoint_raw/global", GlobalPositionTarget, queue_size=10)
+        self.pub_pt = rospy.Publisher(f"/mavros{instance_num}/setpoint_raw/local", PositionTarget, queue_size=10)
+        self.pub_gpt = rospy.Publisher(f"/mavros{instance_num}/setpoint_raw/global", GlobalPositionTarget, queue_size=10)
         # Объект для управления по локальной системе координат
         self.pt = PositionTarget()
         self.pt.coordinate_frame = self.pt.FRAME_LOCAL_NED
@@ -64,29 +66,23 @@ class CopterController():
         self.pose_global = np.array([])
         self.velocity = np.array([0., 0., 0.])
         self.mavros_state = State()
-        self.obstacles = {}
         self.route_line = Line(np.array([0, 0, 0]), np.array([0, 0, 0]))  # Линия от предыдущей точке к следующей
         self.surface = Surface(np.array([0, 0, 0]), np.array([0, 0, 0]))  # Плоскость, перпендикулятрная линии маршрута
         self.subscribe_on_topics()
 
     def offboard_loop(self):
-        # цикл управления
-        rate = rospy.Rate(freq)
-        while not rospy.is_shutdown():
-            self.dt = time.time() - self.t0
-            self.set_mode("OFFBOARD")
-            # управляем аппаратом
-            if self.state == "disarm":
-                self.arming(True)
-            elif self.state == "takeoff":
-                self.takeoff()
-            elif self.state == "tookoff":
-                self.follow_waypoint_list()
-            elif self.state == "arrival":
-                error = self.move_to_point(self.current_waypoint)
-            self.pub_pt.publish(self.pt)
-
-            rate.sleep()
+        self.dt = time.time() - self.t0
+        self.set_mode("OFFBOARD")
+        # управляем аппаратом
+        if self.state == "disarm":
+            self.arming(True)
+        elif self.state == "takeoff":
+            self.takeoff()
+        elif self.state == "tookoff":
+            self.follow_waypoint_list()
+        elif self.state == "arrival":
+            error = self.move_to_point(self.current_waypoint)
+        self.pub_pt.publish(self.pt)
 
     # взлет коптера
     def takeoff(self):
@@ -96,7 +92,7 @@ class CopterController():
             self.previous_waypoint = np.array(self.pose)
             self.current_waypoint = self.waypoint_list.pop(0)
             self.route_line = Line(self.previous_waypoint, self.current_waypoint)
-            print('first waypoint', self.current_waypoint)
+            print(self.instance_num, 'first waypoint', self.current_waypoint)
 
     def move_to_point(self, point):
         error = self.pose - point
@@ -148,27 +144,25 @@ class CopterController():
                 self.previous_waypoint = np.array(self.current_waypoint)
                 self.current_waypoint = self.waypoint_list.pop(0)
                 self.route_line = Line(self.previous_waypoint, self.current_waypoint)
-                print("\n\nNEXT\n\n")
-                print('cur waypoint', self.current_waypoint)
+                print(self.instance_num, "\n\nNEXT\n\n")
+                print(self.instance_num, 'cur waypoint', self.current_waypoint)
             else:
                 self.state = "arrival"
-                print("FINISH")
+                print(self.instance_num, "FINISH")
 
     def subscribe_on_topics(self):
         # локальная система координат, точка отсчета = место включения аппарата
-        rospy.Subscriber("/mavros1/local_position/pose", PoseStamped, self.pose_cb)
-        rospy.Subscriber("/mavros1/local_position/velocity_local", TwistStamped, self.velocity_cb)
+        rospy.Subscriber(f"/mavros{self.instance_num}/local_position/pose", PoseStamped, self.pose_cb)
+        rospy.Subscriber(f"/mavros{self.instance_num}/local_position/velocity_local", TwistStamped, self.velocity_cb)
         # глобальная система координат
-        rospy.Subscriber("/mavros1/global_position/global", NavSatFix, self.pose_global_cb)
+        rospy.Subscriber(f"/mavros{self.instance_num}/global_position/global", NavSatFix, self.pose_global_cb)
         # состояние
-        rospy.Subscriber("/mavros1/state", State, self.state_cb)
-        # Радар препятствий
-        rospy.Subscriber("/ca_radar/rel_obstacles", String, self.radar_cb)
+        rospy.Subscriber(f"/mavros{self.instance_num}/state", State, self.state_cb)
 
     def pose_cb(self, msg):
         pose = msg.pose.position
         self.pose = np.array([pose.x, pose.y, pose.z])
-        # print('local', self.pose)
+        # print(self.instance_num, 'local', self.pose)
 
     def velocity_cb(self, msg):
         velocity = msg.twist.linear
@@ -183,33 +177,32 @@ class CopterController():
         self.pose_global = np.array([msg.latitude, msg.longitude, msg.altitude])
         # Преобразование эллипсоидной высоты в высоту над уровнем моря
         # self.pose_global = np.array([msg.latitude, msg.longitude, msg.altitude - geoid_height(msg.latitude, msg.longitude)])
-        # print('global', self.pose_global)
+        # print(self.instance_num, 'global', self.pose_global)
 
     def state_cb(self, msg):
         self.mavros_state = msg
 
-    def radar_cb(self, msg):
-        for i in range(1, self.instances+1):
-            self.obstacles[i] = []
-        msg = str(msg.data).split()
-        for i in range(1, len(msg), 4):
-            self.obstacles[int(msg[i])].append(np.array(list(map(float, [msg[i+1], msg[i+2], msg[i+3]]))))
-        # if len(self.obstacles[1]) > 0:
-        #     print(self.obstacles)
+
+
+    def service_proxy(self, path, arg_type, *args, **kwds):
+        service = rospy.ServiceProxy(f"/mavros{self.instance_num}/{path}", arg_type)
+        ret = service(*args, **kwds)
+
+        # rospy.loginfo(f"{1}: {path} {args}, {kwds} => {ret}")
 
     def arming(self, to_arm):
         if self.dt < 5:
             self.set_vel(np.array([0., 0., 3.]))
         if self.dt > 1:
             if self.mavros_state is not None and self.mavros_state.armed != to_arm:
-                service_proxy("cmd/arming", CommandBool, to_arm)
+                self.service_proxy("cmd/arming", CommandBool, to_arm)
         if self.dt > 5:
             self.state = "takeoff"
             self.current_waypoint = np.array([self.pose[0], self.pose[1], self.pose[2] + 3.])
 
     def set_mode(self, new_mode):
         if self.mavros_state is not None and self.mavros_state.mode != new_mode:
-            service_proxy("set_mode", SetMode, custom_mode=new_mode)
+            self.service_proxy("set_mode", SetMode, custom_mode=new_mode)
 
     # Управление по скоростям, локальная система координат, направления совпадают с оными в глобальной системе координат
     def set_vel(self, velocity):
@@ -263,7 +256,7 @@ class CopterController():
         res = self.surface.pr_point(self.pose + res) - self.pose
         if np.linalg.norm(res) > self.MAX_AVOID_SPEED:
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
-        # print(res)
+        # print(self.instance_num, res)
 
         return res
 
@@ -273,17 +266,17 @@ class CopterController():
         error = self.route_line.get_point_dist(self.pose)
         res = (self.route_line.pr_point(self.pose) - self.pose) * self.TRAJECTORY_CORRECTION
         if error > self.MAXIMAL_DEVIATION:
-            print("CRITICAL ROUTE ERROR", self.dt)
+            print(self.instance_num, "CRITICAL ROUTE ERROR", self.dt)
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED * 2
         elif np.linalg.norm(res) > self.MAX_AVOID_SPEED:
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
-        # print("ROUTE CORRECTION", res)
+        # print(self.instance_num, "ROUTE CORRECTION", res)
         return res
 
 
     def filter_obstacles(self):
         res = []
-        for vect in self.obstacles[1]:
+        for vect in obstacles[self.instance_num]:
             pose = self.pose + vect
             if self.surface.substitute_point(pose) >= 0 and np.linalg.norm(vect) <= self.AVOID_RADIUS or \
                     self.surface.substitute_point(pose) < 0 and self.surface.get_point_dist(pose) <= 5 and \
@@ -301,12 +294,15 @@ class CopterController():
         # return error < self.ARRIVAL_RADIUS
 
 
-def service_proxy(path, arg_type, *args, **kwds):
-    service = rospy.ServiceProxy(f"/mavros{1}/{path}", arg_type)
-    ret = service(*args, **kwds)
 
-    # rospy.loginfo(f"{1}: {path} {args}, {kwds} => {ret}")
-
+def radar_cb(msg):
+    for i in range(1, INSTANCES_NUM+1):
+        obstacles[i] = []
+    msg = str(msg.data).split()
+    for i in range(1, len(msg), 4):
+        obstacles[int(msg[i])].append(np.array(list(map(float, [msg[i+1], msg[i+2], msg[i+3]]))))
+    # if len(obstacles[1]) > 0:
+    #     print(obstacles)
 
 def on_shutdown_cb():
     rospy.logfatal("shutdown")
@@ -359,16 +355,28 @@ def geoid_height(lat, lon):
 # см. также описание mavlink сообщения https://mavlink.io/en/messages/common.html#SET_POSITION_TARGET_LOCAL_NED
 
 
+def offboard_loop(controllers):
+     # цикл управления всеми дронами
+    rate = rospy.Rate(freq)
+    while not rospy.is_shutdown():
+        for i in range(len(controllers)):
+            controllers[i].offboard_loop()
+        rate.sleep()
+
 if __name__ == '__main__':
     rospy.init_node(node_name)
     rospy.loginfo(node_name + " started")
 
-    copter_controller = CopterController()
+    controllers = [CopterController(i) for i in range(1, INSTANCES_NUM+1)]
+    rospy.Subscriber("/ca_radar/rel_obstacles", String, radar_cb)
+    for i in range(1, INSTANCES_NUM+1):
+        obstacles[i] = []
+
 
     rospy.on_shutdown(on_shutdown_cb)
 
     try:
-        copter_controller.offboard_loop()
+        offboard_loop(controllers)
     except rospy.ROSInterruptException:
         pass
 
