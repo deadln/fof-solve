@@ -106,15 +106,15 @@ class CopterController():
         # Добавление вектора для поддержания траектории маршрута
         velocity += self.get_correction_velocity()
         # Вектор к точке
-        if self.max_velocity**2 > np.linalg.norm(velocity)**2:
-            speed_to_point = math.sqrt(self.max_velocity**2 - np.linalg.norm(velocity)**2)
+        if self.MAX_VELOCITY**2 > np.linalg.norm(velocity)**2:
+            speed_to_point = math.sqrt(self.MAX_VELOCITY**2 - np.linalg.norm(velocity)**2)
         else:
             speed_to_point = 0.2
         route_vect = (self.current_waypoint - self.previous_waypoint) / np.linalg.norm((self.current_waypoint - self.previous_waypoint))
         velocity_to_point = route_vect * speed_to_point  # -error / np.linalg.norm(error) * speed_to_point
         # velocity_to_point = -self.P_GAIN * error
-        # if np.linalg.norm(velocity_to_point) > self.max_velocity:
-        #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.max_velocity
+        # if np.linalg.norm(velocity_to_point) > self.:
+        #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.
 
         velocity += velocity_to_point
         # elif np.linalg.norm(error) < 5.0:
@@ -300,7 +300,7 @@ class CopterController():
 
     def is_passed_turn(self, error):
         # sur = Surface()
-        return error < self.arrival_radius
+        return error < self.ARRIVAL_RADIUS
 
 
 def service_proxy(path, arg_type, *args, **kwds):
