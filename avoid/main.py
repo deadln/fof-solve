@@ -44,16 +44,17 @@ class CopterController():
         self.dt = 0
 
         # params
-        self.p_gain = 2  # Множитель вектора скорости для приближения к точке
-        self.max_velocity = 6.0
-        self.min_velocity = 0.3
-        self.approach_velocity = 0.4
-        self.arrival_radius = 4.0
-        self.arrival_radius_global = 0.0001
+        self.P_GAIN = 2  # Множитель вектора скорости для приближения к точке
+        self.MAX_VELOCITY = 6.0
+        self.MIN_VELOCITY = 0.3
+        self.APPROACH_VELOCITY = 0.4
+        self.ARRIVAL_RADIUS = 2.0
+        self.ARRIVAL_RADIUS_GLOBAL = 0.0001
         self.waypoint_list = get_waypoints()
         self.AVOID_RADIUS = 15.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
         self.TRAJECTORY_CORRECTION = 1.4  # Множитель вектора скорости для корректирования траектории
+        self.MAXIMAL_DEVIATION = 8.0
 
 
         self.current_waypoint = np.array([0., 0., 0.])
@@ -89,7 +90,7 @@ class CopterController():
     # взлет коптера
     def takeoff(self):
         error = self.move_to_point_straight(self.current_waypoint)
-        if error < self.arrival_radius:
+        if error < self.ARRIVAL_RADIUS:
             self.state = "tookoff"
             self.previous_waypoint = np.array(self.pose)
             self.current_waypoint = self.waypoint_list.pop(0)
@@ -111,14 +112,15 @@ class CopterController():
             speed_to_point = 0.2
         route_vect = (self.current_waypoint - self.previous_waypoint) / np.linalg.norm((self.current_waypoint - self.previous_waypoint))
         velocity_to_point = route_vect * speed_to_point  # -error / np.linalg.norm(error) * speed_to_point
-        # velocity_to_point = -self.p_gain * error
+        # velocity_to_point = -self.P_GAIN * error
         # if np.linalg.norm(velocity_to_point) > self.max_velocity:
         #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.max_velocity
+
         velocity += velocity_to_point
         # elif np.linalg.norm(error) < 5.0:
-        #     velocity = velocity / velocity_norm * self.approach_velocity
-        # elif velocity_norm < self.min_velocity:
-        #     velocity = velocity / velocity_norm * self.min_velocity
+        #     velocity = velocity / velocity_norm * self.APPROACH_VELOCITY
+        # elif velocity_norm < self.MIN_VELOCITY:
+        #     velocity = velocity / velocity_norm * self.MIN_VELOCITY
 
         self.set_vel(velocity)
         return np.linalg.norm(error)
@@ -128,12 +130,12 @@ class CopterController():
         error = self.pose - point
 
         # Вектор к точке
-        velocity = -self.p_gain * error
+        velocity = -self.P_GAIN * error
         velocity_norm = np.linalg.norm(velocity)
-        if velocity_norm > self.max_velocity:
-            velocity = velocity / velocity_norm * self.max_velocity
-        elif velocity_norm < self.min_velocity:
-            velocity = velocity / velocity_norm * self.min_velocity
+        if velocity_norm > self.MAX_VELOCITY:
+            velocity = velocity / velocity_norm * self.MAX_VELOCITY
+        elif velocity_norm < self.MIN_VELOCITY:
+            velocity = velocity / velocity_norm * self.MIN_VELOCITY
 
         self.set_vel(velocity)
         return np.linalg.norm(error)
@@ -148,7 +150,7 @@ class CopterController():
 
     def follow_waypoint_list(self):
         error = self.move_to_point(self.current_waypoint)
-        if is_passed_turn(error):
+        if self.is_passed_turn(error):
             if len(self.waypoint_list) != 0:
                 self.previous_waypoint = np.array(self.current_waypoint)
                 self.current_waypoint = self.waypoint_list.pop(0)
@@ -276,10 +278,9 @@ class CopterController():
         if np.linalg.norm(self.pose - self.current_waypoint) < 7:
             return np.array([0.0, 0.0, 0.0])
         error = self.route_line.get_point_dist(self.pose)
-        if error > 5.0:
-            print("CRITICAL ROUTE ERROR", self.dt)
         res = (self.route_line.pr_point(self.pose) - self.pose) * self.TRAJECTORY_CORRECTION
-        if error > 5.0:
+        if error > self.MAXIMAL_DEVIATION:
+            print("CRITICAL ROUTE ERROR", self.dt)
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED * 2
         elif np.linalg.norm(res) > self.MAX_AVOID_SPEED:
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
@@ -315,7 +316,7 @@ def on_shutdown_cb():
 
 # Получение точек маршрута
 def get_waypoints():
-    with open("../tasks/avoid/gps_mission_1.rt") as f:
+    with open("../tasks/avoid/gps_mission_2.rt") as f:
         s = f.read()
 
     lst = s.split('\n')
