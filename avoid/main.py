@@ -48,7 +48,7 @@ class CopterController():
         self.max_velocity = 6.0
         self.min_velocity = 0.3
         self.approach_velocity = 0.4
-        self.arrival_radius = 2.0
+        self.arrival_radius = 4.0
         self.arrival_radius_global = 0.0001
         self.waypoint_list = get_waypoints()
         self.AVOID_RADIUS = 15.0  # Радиус обнаружения "валидных" препятствий
@@ -105,9 +105,15 @@ class CopterController():
         # Добавление вектора для поддержания траектории маршрута
         velocity += self.get_correction_velocity()
         # Вектор к точке
-        velocity_to_point = -self.p_gain * error
-        if np.linalg.norm(velocity_to_point) > self.max_velocity:
-            velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.max_velocity
+        if self.max_velocity**2 > np.linalg.norm(velocity)**2:
+            speed_to_point = math.sqrt(self.max_velocity**2 - np.linalg.norm(velocity)**2)
+        else:
+            speed_to_point = 0.2
+        route_vect = (self.current_waypoint - self.previous_waypoint) / np.linalg.norm((self.current_waypoint - self.previous_waypoint))
+        velocity_to_point = route_vect * speed_to_point  # -error / np.linalg.norm(error) * speed_to_point
+        # velocity_to_point = -self.p_gain * error
+        # if np.linalg.norm(velocity_to_point) > self.max_velocity:
+        #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.max_velocity
         velocity += velocity_to_point
         # elif np.linalg.norm(error) < 5.0:
         #     velocity = velocity / velocity_norm * self.approach_velocity
