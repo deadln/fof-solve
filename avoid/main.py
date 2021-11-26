@@ -99,20 +99,20 @@ class CopterController():
     def move_to_point(self, point):
         error = self.pose - point
 
-        # Вектор к точке
-        velocity = -self.p_gain * error
-        velocity_norm = np.linalg.norm(velocity)
-        if velocity_norm > self.max_velocity:
-            velocity = velocity / velocity_norm * self.max_velocity
-        # elif np.linalg.norm(error) < 5.0:
-        #     velocity = velocity / velocity_norm * self.approach_velocity
-        # elif velocity_norm < self.min_velocity:
-        #     velocity = velocity / velocity_norm * self.min_velocity
-
+        velocity = np.array([0.0, 0.0, 0.0])
         # Добавление вектора для уклонения от препятствий
         velocity += self.get_avoid_velocity()
         # Добавление вектора для поддержания траектории маршрута
         velocity += self.get_correction_velocity()
+        # Вектор к точке
+        velocity_to_point = -self.p_gain * error
+        if np.linalg.norm(velocity_to_point) > self.max_velocity:
+            velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.max_velocity
+        velocity += velocity_to_point
+        # elif np.linalg.norm(error) < 5.0:
+        #     velocity = velocity / velocity_norm * self.approach_velocity
+        # elif velocity_norm < self.min_velocity:
+        #     velocity = velocity / velocity_norm * self.min_velocity
 
         self.set_vel(velocity)
         return np.linalg.norm(error)
