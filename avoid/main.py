@@ -305,7 +305,7 @@ def on_shutdown_cb():
 
 # Получение точек маршрута
 def get_waypoints():
-    with open("../tasks/avoid/gps_mission_1.rt") as f:
+    with open("../tasks/avoid/gps_mission_2.rt") as f:
         s = f.read()
 
     lst = s.split('\n')
