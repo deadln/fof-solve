@@ -1,0 +1,208 @@
+{
+    "SettingsVersion": 1.2,
+    "SimMode": "Multirotor",
+    "LocalHostIp": "127.0.0.1",
+    "Vehicles": {
+        "PX4": {
+            "VehicleType": "PX4Multirotor",
+            "Sensors":{
+                "Barometer":{
+                    "SensorType": 1,
+                    "Enabled": true,
+                    "PressureFactorSigma": 0.0001825
+                },
+                "Gps": {
+                    "SensorType": 3,
+                    "Enabled" : true,
+                    "UpdateLatency": 0,
+                    "UpdateFrequency": 20
+                }
+            },
+            "Parameters": {
+                "NAV_RCL_ACT": 0,
+                "NAV_DLL_ACT": 0,
+                "COM_OBL_ACT": 1
+            }
+        },
+        "zbot_1": {
+          "VehicleType": "SimpleFlight",
+          "X": 450.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_2": {
+          "VehicleType": "SimpleFlight",
+          "X": 452.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_3": {
+          "VehicleType": "SimpleFlight",
+          "X": 454.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_4": {
+          "VehicleType": "SimpleFlight",
+          "X": 456.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_5": {
+          "VehicleType": "SimpleFlight",
+          "X": 458.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_6": {
+          "VehicleType": "SimpleFlight",
+          "X": 460.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_7": {
+          "VehicleType": "SimpleFlight",
+          "X": 462.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_8": {
+          "VehicleType": "SimpleFlight",
+          "X": 464.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_9": {
+          "VehicleType": "SimpleFlight",
+          "X": 466.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_10": {
+          "VehicleType": "SimpleFlight",
+          "X": 468.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_11": {
+          "VehicleType": "SimpleFlight",
+          "X": 470.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_12": {
+          "VehicleType": "SimpleFlight",
+          "X": 472.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_13": {
+          "VehicleType": "SimpleFlight",
+          "X": 474.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_14": {
+          "VehicleType": "SimpleFlight",
+          "X": 476.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_15": {
+          "VehicleType": "SimpleFlight",
+          "X": 478.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_16": {
+          "VehicleType": "SimpleFlight",
+          "X": 480.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_17": {
+          "VehicleType": "SimpleFlight",
+          "X": 482.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_18": {
+          "VehicleType": "SimpleFlight",
+          "X": 484.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_19": {
+          "VehicleType": "SimpleFlight",
+          "X": 486.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_20": {
+          "VehicleType": "SimpleFlight",
+          "X": 488.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_21": {
+          "VehicleType": "SimpleFlight",
+          "X": 490.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_22": {
+          "VehicleType": "SimpleFlight",
+          "X": 492.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_23": {
+          "VehicleType": "SimpleFlight",
+          "X": 494.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_24": {
+          "VehicleType": "SimpleFlight",
+          "X": 496.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_25": {
+          "VehicleType": "SimpleFlight",
+          "X": 498.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_26": {
+          "VehicleType": "SimpleFlight",
+          "X": 500.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_27": {
+          "VehicleType": "SimpleFlight",
+          "X": 502.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_28": {
+          "VehicleType": "SimpleFlight",
+          "X": 504.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_29": {
+          "VehicleType": "SimpleFlight",
+          "X": 506.0,
+          "Y": 100.0,
+          "Z": 115.0
+        },
+        "zbot_30": {
+          "VehicleType": "SimpleFlight",
+          "X": 508.0,
+          "Y": 100.0,
+          "Z": 115.0
+        }
+    }
+}
