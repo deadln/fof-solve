@@ -46,7 +46,7 @@ class CopterController():
         # params
         self.P_GAIN = 2  # Множитель вектора скорости для приближения к точке
         self.MAX_VELOCITY = 6.0
-        self.MIN_VELOCITY = 0.3
+        self.MIN_VELOCITY = 0.2
         self.APPROACH_VELOCITY = 0.4
         self.ARRIVAL_RADIUS = 2.0
         self.ARRIVAL_RADIUS_GLOBAL = 0.0001
@@ -110,12 +110,12 @@ class CopterController():
         if self.MAX_VELOCITY**2 > np.linalg.norm(velocity)**2:
             speed_to_point = math.sqrt(self.MAX_VELOCITY**2 - np.linalg.norm(velocity)**2)
         else:
-            speed_to_point = 0.2
+            speed_to_point = self.MIN_VELOCITY
         route_vect = (self.current_waypoint - self.previous_waypoint) / np.linalg.norm((self.current_waypoint - self.previous_waypoint))
         velocity_to_point = route_vect * speed_to_point  # -error / np.linalg.norm(error) * speed_to_point
         # velocity_to_point = -self.P_GAIN * error
-        # if np.linalg.norm(velocity_to_point) > self.:
-        #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.
+        # if np.linalg.norm(velocity_to_point) > self.MAX_VELOCITY:
+        #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.MAX_VELOCITY
 
         velocity += velocity_to_point
         # elif np.linalg.norm(error) < 5.0:
@@ -141,17 +141,9 @@ class CopterController():
         self.set_vel(velocity)
         return np.linalg.norm(error)
 
-    # Перемещение к точке по глобальным координатам
-    def move_to_point_global(self, point):
-        error_h = np.array([self.pose_global[0] - point[0], self.pose_global[1] - point[1]])
-        error_v = abs(self.pose_global[2] - point[2])
-
-        self.set_pos_global(point)
-        return np.linalg.norm(error_h), error_v
-
     def follow_waypoint_list(self):
         error = self.move_to_point(self.current_waypoint)
-        if self.is_passed_turn(error):
+        if self.is_passed_turn():
             if len(self.waypoint_list) != 0:
                 self.previous_waypoint = np.array(self.current_waypoint)
                 self.current_waypoint = self.waypoint_list.pop(0)
@@ -299,7 +291,7 @@ class CopterController():
                 res.append(np.array(vect))
         return res
 
-    def is_passed_turn(self, error):
+    def is_passed_turn(self):
         route_vect = self.current_waypoint - self.previous_waypoint
         route_vect = route_vect / np.linalg.norm(route_vect)
         sur = Surface(self.current_waypoint - route_vect * self.CHECKPOINT_SURFACE_BIAS, route_vect)
