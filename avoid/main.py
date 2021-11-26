@@ -148,7 +148,7 @@ class CopterController():
 
     def follow_waypoint_list(self):
         error = self.move_to_point(self.current_waypoint)
-        if error < self.arrival_radius:
+        if is_passed_turn(error):
             if len(self.waypoint_list) != 0:
                 self.previous_waypoint = np.array(self.current_waypoint)
                 self.current_waypoint = self.waypoint_list.pop(0)
@@ -296,6 +296,10 @@ class CopterController():
                     np.linalg.norm(vect) <= 5:
                 res.append(np.array(vect))
         return res
+
+    def is_passed_turn(self, error):
+        # sur = Surface()
+        return error < self.arrival_radius
 
 
 def service_proxy(path, arg_type, *args, **kwds):
