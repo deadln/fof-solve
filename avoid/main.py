@@ -27,6 +27,7 @@ lz = {}
 
 class CopterController():
     def __init__(self):
+        # Системные данные и объекты
         self.state = "disarm"
         # Количество аппаратов
         self.instances = 1
@@ -43,7 +44,7 @@ class CopterController():
         self.t0 = time.time()
         self.dt = 0
 
-        # params
+        # Параметры и константы
         self.p_gain = 2  # Множитель вектора скорости для приближения к точке
         self.max_velocity = 6.0
         self.min_velocity = 0.3
@@ -53,9 +54,11 @@ class CopterController():
         self.waypoint_list = get_waypoints()
         self.AVOID_RADIUS = 15.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
-        self.TRAJECTORY_CORRECTION = 1.4  # Множитель вектора скорости для корректирования траектории
+        self.TRAJECTORY_CORRECTION = 1.6  # Множитель вектора скорости для корректирования траектории
+        self.AVOID_COEF = 2.0  # Коэффициент умножения вектора уклонения
+        self.CRITICAL_DEVIATION = 5.0
 
-
+        # Переменные состояния аппарата
         self.current_waypoint = np.array([0., 0., 0.])
         self.previous_waypoint = np.array([0., 0., 0.])
         self.pose = np.array([])
@@ -65,6 +68,7 @@ class CopterController():
         self.obstacles = {}
         self.route_line = Line(np.array([0, 0, 0]), np.array([0, 0, 0]))  # Линия от предыдущей точке к следующей
         self.surface = Surface(np.array([0, 0, 0]), np.array([0, 0, 0]))  # Плоскость, перпендикулятрная линии маршрута
+        self.ignore_calculation_flag = False
         self.subscribe_on_topics()
 
     def offboard_loop(self):
@@ -103,12 +107,17 @@ class CopterController():
         # Добавление вектора для уклонения от препятствий
         velocity += self.get_avoid_velocity()
         # Добавление вектора для поддержания траектории маршрута
-        velocity += self.get_correction_velocity()
+        if not self.ignore_calculation_flag or self.route_line.get_point_dist(self.pose) > self.CRITICAL_DEVIATION:
+            velocity += self.get_correction_velocity()
+        # if np.linalg.norm(velocity) > self.MAX_AVOID_SPEED * 1.5:
+        #     self.ignore_calculation_flag = True
         # Вектор к точке
-        velocity_to_point = -self.p_gain * error
-        if np.linalg.norm(velocity_to_point) > self.max_velocity:
-            velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.max_velocity
-        velocity += velocity_to_point
+        if not self.ignore_calculation_flag:
+            velocity_to_point = -self.p_gain * error
+            if np.linalg.norm(velocity_to_point) > self.max_velocity:
+                velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.max_velocity
+            velocity += velocity_to_point
+        self.ignore_calculation_flag = False
         # elif np.linalg.norm(error) < 5.0:
         #     velocity = velocity / velocity_norm * self.approach_velocity
         # elif velocity_norm < self.min_velocity:
@@ -258,10 +267,13 @@ class CopterController():
         if len(valid_obstacles) == 0:
             return res
         for obstacle in valid_obstacles:
-            res += -(obstacle / np.linalg.norm(obstacle)) * (self.AVOID_RADIUS / np.linalg.norm(obstacle))
-        res = self.surface.pr_point(self.pose + res) - self.pose
+            res += obstacle * (self.AVOID_RADIUS / np.linalg.norm(obstacle))
+            # res += -(obstacle / np.linalg.norm(obstacle)) * (self.AVOID_RADIUS / np.linalg.norm(obstacle))
+        res = (self.surface.pr_point(self.pose + res) - self.pose) * self.AVOID_COEF
         if np.linalg.norm(res) > self.MAX_AVOID_SPEED:
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
+            # self.ignore_calculation_flag = True
+            print("CRITICAL AVOID")
         # print(res)
 
         return res
@@ -270,10 +282,10 @@ class CopterController():
         if np.linalg.norm(self.pose - self.current_waypoint) < 7:
             return np.array([0.0, 0.0, 0.0])
         error = self.route_line.get_point_dist(self.pose)
-        if error > 5.0:
+        if error > self.CRITICAL_DEVIATION:
             print("CRITICAL ROUTE ERROR", self.dt)
         res = (self.route_line.pr_point(self.pose) - self.pose) * self.TRAJECTORY_CORRECTION
-        if error > 5.0:
+        if error > self.CRITICAL_DEVIATION:
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED * 2
         elif np.linalg.norm(res) > self.MAX_AVOID_SPEED:
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
