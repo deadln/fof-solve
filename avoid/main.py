@@ -55,6 +55,7 @@ class CopterController():
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
         self.TRAJECTORY_CORRECTION = 1.4  # Множитель вектора скорости для корректирования траектории
         self.MAXIMAL_DEVIATION = 8.0
+        self.CHECKPOINT_SURFACE_BIAS = 3.0
 
 
         self.current_waypoint = np.array([0., 0., 0.])
@@ -299,8 +300,13 @@ class CopterController():
         return res
 
     def is_passed_turn(self, error):
-        # sur = Surface()
-        return error < self.ARRIVAL_RADIUS
+        route_vect = self.current_waypoint - self.previous_waypoint
+        route_vect = route_vect / np.linalg.norm(route_vect)
+        sur = Surface(self.current_waypoint - route_vect * self.CHECKPOINT_SURFACE_BIAS, route_vect)
+        if sur.substitute_point(self.pose) > 0:
+            return True
+        return False
+        # return error < self.ARRIVAL_RADIUS
 
 
 def service_proxy(path, arg_type, *args, **kwds):
