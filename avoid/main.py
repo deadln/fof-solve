@@ -198,14 +198,14 @@ class CopterController():
         #     print(self.obstacles)
 
     def arming(self, to_arm):
-        if self.dt < 10:
+        if self.dt < 5:
             self.set_vel(np.array([0., 0., 3.]))
-        if self.dt > 7.5:
+        if self.dt > 1:
             if self.mavros_state is not None and self.mavros_state.armed != to_arm:
                 service_proxy("cmd/arming", CommandBool, to_arm)
-        if self.dt > 10:
+        if self.dt > 5:
             self.state = "takeoff"
-            self.current_waypoint = np.array([self.pose[0], self.pose[1], self.pose[2] + 10.])
+            self.current_waypoint = np.array([self.pose[0], self.pose[1], self.pose[2] + 3.])
 
     def set_mode(self, new_mode):
         if self.mavros_state is not None and self.mavros_state.mode != new_mode:
