@@ -1,6 +1,7 @@
 {
     "SettingsVersion": 1.2,
     "SimMode": "Multirotor",
+    "LocalHostIp": "127.0.0.1",
     "Vehicles": {
         "PX4": {
             "VehicleType": "PX4Multirotor",
