@@ -25,7 +25,9 @@ node_name = "offboard_node"
 # Количество аппаратов
 INSTANCES_NUM = 3
 
+controllers = []
 obstacles = {}
+priority = {}
 
 
 class CopterController():
@@ -47,17 +49,19 @@ class CopterController():
 
         # params
         self.P_GAIN = 2  # Множитель вектора скорости для приближения к точке
-        self.MAX_VELOCITY = 6.0
+        self.MAX_VELOCITY = 10.0
         self.MIN_VELOCITY = 0.2
-        self.APPROACH_VELOCITY = 0.4
+        self.APPROACH_VELOCITY = 5.0
+        self.APPROACH_RADIUS = 15.0
         self.ARRIVAL_RADIUS = 2.0
         self.ARRIVAL_RADIUS_GLOBAL = 0.0001
         self.waypoint_list = get_waypoints()
-        self.AVOID_RADIUS = 15.0  # Радиус обнаружения "валидных" препятствий
+        self.AVOID_RADIUS = 20.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
-        self.TRAJECTORY_CORRECTION = 1.4  # Множитель вектора скорости для корректирования траектории
+        self.TRAJECTORY_CORRECTION = 1.7  # Множитель вектора скорости для корректирования траектории
         self.MAXIMAL_DEVIATION = 8.0
-        self.CHECKPOINT_SURFACE_BIAS = 3.0
+        self.CHECKPOINT_SURFACE_BIAS = 4.0
+        self.CRITICAL_DISTANCE = 2.5
 
 
         self.current_waypoint = np.array([0., 0., 0.])
@@ -103,21 +107,7 @@ class CopterController():
         # Добавление вектора для поддержания траектории маршрута
         velocity += self.get_correction_velocity()
         # Вектор к точке
-        if self.MAX_VELOCITY**2 > np.linalg.norm(velocity)**2:
-            speed_to_point = math.sqrt(self.MAX_VELOCITY**2 - np.linalg.norm(velocity)**2)
-        else:
-            speed_to_point = self.MIN_VELOCITY
-        route_vect = (self.current_waypoint - self.previous_waypoint) / np.linalg.norm((self.current_waypoint - self.previous_waypoint))
-        velocity_to_point = route_vect * speed_to_point  # -error / np.linalg.norm(error) * speed_to_point
-        # velocity_to_point = -self.P_GAIN * error
-        # if np.linalg.norm(velocity_to_point) > self.MAX_VELOCITY:
-        #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.MAX_VELOCITY
-
-        velocity += velocity_to_point
-        # elif np.linalg.norm(error) < 5.0:
-        #     velocity = velocity / velocity_norm * self.APPROACH_VELOCITY
-        # elif velocity_norm < self.MIN_VELOCITY:
-        #     velocity = velocity / velocity_norm * self.MIN_VELOCITY
+        velocity += self.get_point_velocity(velocity)
 
         self.set_vel(velocity)
         return np.linalg.norm(error)
@@ -261,8 +251,8 @@ class CopterController():
         return res
 
     def get_correction_velocity(self):
-        if np.linalg.norm(self.pose - self.current_waypoint) < 7:
-            return np.array([0.0, 0.0, 0.0])
+        # if np.linalg.norm(self.pose - self.current_waypoint) < 7:
+        #     return np.array([0.0, 0.0, 0.0])
         error = self.route_line.get_point_dist(self.pose)
         res = (self.route_line.pr_point(self.pose) - self.pose) * self.TRAJECTORY_CORRECTION
         if error > self.MAXIMAL_DEVIATION:
@@ -272,6 +262,28 @@ class CopterController():
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
         # print(self.instance_num, "ROUTE CORRECTION", res)
         return res
+
+    def get_point_velocity(self, velocity):
+        # Меры против столкновений
+        for i in range(1, INSTANCES_NUM+1):
+            if i != self.instance_num and np.linalg.norm(self.pose - controllers[i-1].pose) < self.CRITICAL_DISTANCE \
+                and (len(self.waypoint_list) > len(controllers[i-1].waypoint_list) or \
+                     np.linalg.norm(self.current_waypoint - self.pose) > np.linalg.norm(controllers[i-1].current_waypoint - controllers[i-1].pose)):
+                return np.array([0.0, 0.0, 0.0])
+
+        max_speed = self.MAX_VELOCITY
+        if np.linalg.norm(self.pose - self.current_waypoint) < self.APPROACH_RADIUS:
+            max_speed = self.APPROACH_VELOCITY
+        if max_speed**2 > np.linalg.norm(velocity)**2:
+            speed_to_point = math.sqrt(max_speed**2 - np.linalg.norm(velocity)**2)
+        else:
+            speed_to_point = self.MIN_VELOCITY
+        route_vect = (self.current_waypoint - self.previous_waypoint) / np.linalg.norm((self.current_waypoint - self.previous_waypoint))
+        velocity_to_point = route_vect * speed_to_point  # -error / np.linalg.norm(error) * speed_to_point
+        # velocity_to_point = -self.P_GAIN * error
+        # if np.linalg.norm(velocity_to_point) > self.MAX_VELOCITY:
+        #     velocity_to_point = velocity_to_point / np.linalg.norm(velocity_to_point) * self.MAX_VELOCITY
+        return velocity_to_point
 
 
     def filter_obstacles(self):
@@ -359,7 +371,7 @@ def offboard_loop(controllers):
      # цикл управления всеми дронами
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
-        for i in range(len(controllers)):
+        for i in range(INSTANCES_NUM):
             controllers[i].offboard_loop()
         rate.sleep()
 
