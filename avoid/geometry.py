@@ -173,8 +173,8 @@ class Basis:
              (1 - math.cos(ang270)) * rot_axis[2] * rot_axis[1] + math.sin(ang270) * rot_axis[0],
              math.cos(ang270) + (1 - math.cos(ang270)) * rot_axis[2] ** 2]
         ])
-        v1 = np.dot(route_vect, rot_matrix1)
-        v2 = np.dot(route_vect, rot_matrix2)
+        v1 = np.dot(base_z, rot_matrix1)
+        v2 = np.dot(base_z, rot_matrix2)
         if v1[2] > v2[2]:
             base_y = v1
         else:
@@ -186,3 +186,23 @@ class Basis:
 
     def to_old_basis(self, point):
         return np.dot(point, self.basis) + self.center
+
+def is_crossing_rectangles(r1, r2, rect_w, rect_h):
+    if abs(r1[0] - r2[0]) > rect_w or abs(r1[1] - r2[1]) > rect_h:
+        return False
+    return True
+
+def turn_vector(vect, axis, angle):
+    axis = axis / np.linalg.norm(axis)
+    rot_matrix = np.array([
+        [math.cos(angle) + (1 - math.cos(angle)) * axis[0] ** 2,
+         (1 - math.cos(angle)) * axis[0] * axis[1] - math.sin(angle) * axis[2],
+         (1 - math.cos(angle)) * axis[0] * axis[2] + math.sin(angle) * axis[1]],
+        [(1 - math.cos(angle)) * axis[1] * axis[0] + math.sin(angle) * axis[2],
+         math.cos(angle) + (1 - math.cos(angle)) * axis[1] ** 2,
+         (1 - math.cos(angle)) * axis[1] * axis[2] - math.sin(angle) * axis[0]],
+        [(1 - math.cos(angle)) * axis[2] * axis[0] - math.sin(angle) * axis[1],
+         (1 - math.cos(angle)) * axis[2] * axis[1] + math.sin(angle) * axis[0],
+         math.cos(angle) + (1 - math.cos(angle)) * axis[2] ** 2]
+    ])
+    return np.dot(vect, rot_matrix)

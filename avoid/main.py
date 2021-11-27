@@ -4,6 +4,7 @@
 import rospy
 import time
 import sys
+import os
 import math
 import numpy as np
 
@@ -23,7 +24,7 @@ from geometry import *
 freq = 20  # Герц, частота посылки управляющих команд аппарату
 node_name = "offboard_node"
 # Количество аппаратов
-INSTANCES_NUM = 1
+INSTANCES_NUM = 3
 
 controllers = []
 obstacles = {}
@@ -58,6 +59,7 @@ class CopterController():
         self.waypoint_list = get_waypoints()
         self.AVOID_RADIUS = 20.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
+        self.AVOID_P_GAIN = 2.0
         self.TRAJECTORY_CORRECTION = 1.7  # Множитель вектора скорости для корректирования траектории
         self.TRAJECTORY_CORRECTION_Z = 2.1
         self.MAXIMAL_DEVIATION = 8.0
@@ -244,8 +246,8 @@ class CopterController():
             valid_obstacles[i] = self.surface.pr_point(valid_obstacles[i] + self.pose)
         # новый базис
         basis = Basis(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
-        rect_w = 1.2
-        rect_h = 0.5
+        rect_w = 1.3
+        rect_h = 0.6
         # Перевод проекций в новый базис
         for i in range(len(valid_obstacles)):
             valid_obstacles[i] = basis.to_new_basis(valid_obstacles[i])
@@ -253,11 +255,17 @@ class CopterController():
         res = np.array([0.0, 0.0, 0.0])
         if len(valid_obstacles) == 0:
             return res
-        for i in range(len(valid_obstacles)):
-            # if valid_obstacles[i][0] > 0 and valid_obstacles[i][1] > 0:
-            print(valid_obstacles[i])
-        print('\n\n')
+        # for i in range(len(valid_obstacles)):
+        #     # if valid_obstacles[i][0] > 0 and valid_obstacles[i][1] > 0:
+        #     print(valid_obstacles[i])
+        # print('\n\n')
 
+        target = self.get_avoid_point(valid_obstacles, rect_w, rect_h, 0.3, 360)
+        print(self.instance_num, target)
+        if target is None:
+            return res
+        target = basis.to_old_basis(target)
+        res = (target - self.pose) * self.AVOID_P_GAIN
 
         # valid_obstacles = self.filter_obstacles()
         # for obstacle in valid_obstacles:
@@ -327,6 +335,31 @@ class CopterController():
         return False
         # return error < self.ARRIVAL_RADIUS
 
+    def get_avoid_point(self, obstacles, rect_w, rect_h, vect_step_len, step_count):
+        search_vect = np.array([.0, .0, .0])
+        step_angle = 2 * math.pi / step_count  # Угол поворота вектора поиска
+        turn_axis = np.array([.0, .0, 1.0])  # Ось поворота вектора (по направлению движения)
+        iter_count = 0
+        while np.linalg.norm(search_vect) < self.MAXIMAL_DEVIATION + 2.0:
+            search_vect = np.array([.0, iter_count * vect_step_len, .0])  # Вектор для поиска места для уворота
+            # print("vect len", np.linalg.norm(search_vect))
+            for i in range(step_count):
+                cross_flag = False
+                for obstacle in obstacles:
+                    if is_crossing_rectangles(search_vect, obstacle, rect_w, rect_h):
+                        cross_flag = True
+                        break
+                if not cross_flag:
+                    if np.linalg.norm(search_vect) == 0.0:
+                        return None
+                    return search_vect
+                # print(search_vect, "is bad")
+                if np.linalg.norm(search_vect) == 0.0:
+                    break
+                # Поворот вектора
+                search_vect = turn_vector(search_vect, turn_axis, step_angle)
+            iter_count += 1
+        return np.array([self.MAXIMAL_DEVIATION + 2.0, 0.0, 0.0])
 
 
 def radar_cb(msg):
