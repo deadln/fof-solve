@@ -59,9 +59,10 @@ class CopterController():
         self.AVOID_RADIUS = 20.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
         self.TRAJECTORY_CORRECTION = 1.7  # Множитель вектора скорости для корректирования траектории
+        self.TRAJECTORY_CORRECTION_Z = 2.1
         self.MAXIMAL_DEVIATION = 8.0
         self.CHECKPOINT_SURFACE_BIAS = 4.0
-        self.CRITICAL_DISTANCE = 2.5
+        self.CRITICAL_DISTANCE = 3
 
 
         self.current_waypoint = np.array([0., 0., 0.])
@@ -255,7 +256,9 @@ class CopterController():
         #     return np.array([0.0, 0.0, 0.0])
         error = self.route_line.get_point_dist(self.pose)
         res = (self.route_line.pr_point(self.pose) - self.pose) * self.TRAJECTORY_CORRECTION
-        if error > self.MAXIMAL_DEVIATION:
+        if res[2] / self.TRAJECTORY_CORRECTION < -2.0:
+            res += np.array([0.0, 0.0, res[2] / self.TRAJECTORY_CORRECTION]) * self.TRAJECTORY_CORRECTION_Z
+        if error > self.MAXIMAL_DEVIATION:  # or res[2] / self.TRAJECTORY_CORRECTION < -2.0:
             print(self.instance_num, "CRITICAL ROUTE ERROR", self.dt)
             res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED * 2
         elif np.linalg.norm(res) > self.MAX_AVOID_SPEED:
@@ -269,10 +272,12 @@ class CopterController():
             if i != self.instance_num and np.linalg.norm(self.pose - controllers[i-1].pose) < self.CRITICAL_DISTANCE \
                 and (len(self.waypoint_list) > len(controllers[i-1].waypoint_list) or \
                      np.linalg.norm(self.current_waypoint - self.pose) > np.linalg.norm(controllers[i-1].current_waypoint - controllers[i-1].pose)):
+                # print(self.instance_num, "ANTI-COLLISION MEASURES", self.dt)
                 return np.array([0.0, 0.0, 0.0])
 
         max_speed = self.MAX_VELOCITY
-        if np.linalg.norm(self.pose - self.current_waypoint) < self.APPROACH_RADIUS:
+        if np.linalg.norm(self.pose - self.current_waypoint) < self.APPROACH_RADIUS or \
+                self.current_waypoint[2] < self.previous_waypoint[2]:
             max_speed = self.APPROACH_VELOCITY
         if max_speed**2 > np.linalg.norm(velocity)**2:
             speed_to_point = math.sqrt(max_speed**2 - np.linalg.norm(velocity)**2)
@@ -372,6 +377,8 @@ def offboard_loop(controllers):
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
         for i in range(INSTANCES_NUM):
+            if len(controllers[i].pose) == 0:
+                continue
             controllers[i].offboard_loop()
         rate.sleep()
 
