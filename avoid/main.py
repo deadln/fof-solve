@@ -59,7 +59,7 @@ class CopterController():
         self.waypoint_list = get_waypoints()
         self.AVOID_RADIUS = 20.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
-        self.AVOID_P_GAIN = 2.0
+        self.AVOID_P_GAIN = 2.4
         self.TRAJECTORY_CORRECTION = 1.7  # Множитель вектора скорости для корректирования траектории
         self.TRAJECTORY_CORRECTION_Z = 2.1
         self.MAXIMAL_DEVIATION = 8.0
