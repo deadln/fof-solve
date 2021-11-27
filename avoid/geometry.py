@@ -134,3 +134,55 @@ class Surface:
         if self.substitute_point(other_point) > 0:
             vec_to_plane = vec_to_plane * -1
         return other_point + vec_to_plane
+
+
+class Basis:
+    def __init__(self, center, z_vect):
+        self.center = center
+        self.basis = self.get_vector_basis(z_vect)
+        self.basis_1 = np.linalg.inv(self.basis.T)
+        self.center_1 = np.dot(-self.basis_1, center)
+
+    def get_vector_basis(self, route_vect):
+        base_z = route_vect / np.linalg.norm(route_vect)
+        vect_z = np.array([0.0, 0.0, 1.0])
+        rot_axis = np.cross(route_vect, vect_z)
+        rot_axis = rot_axis / np.linalg.norm(rot_axis)
+        base_x = rot_axis
+        ang90 = math.pi / 2
+        ang270 = -math.pi / 2
+        rot_matrix1 = np.array([
+            [math.cos(ang90) + (1 - math.cos(ang90)) * rot_axis[0] ** 2,
+             (1 - math.cos(ang90)) * rot_axis[0] * rot_axis[1] - math.sin(ang90) * rot_axis[2],
+             (1 - math.cos(ang90)) * rot_axis[0] * rot_axis[2] + math.sin(ang90) * rot_axis[1]],
+            [(1 - math.cos(ang90)) * rot_axis[1] * rot_axis[0] + math.sin(ang90) * rot_axis[2],
+             math.cos(ang90) + (1 - math.cos(ang90)) * rot_axis[1] ** 2,
+             (1 - math.cos(ang90)) * rot_axis[1] * rot_axis[2] - math.sin(ang90) * rot_axis[0]],
+            [(1 - math.cos(ang90)) * rot_axis[2] * rot_axis[0] - math.sin(ang90) * rot_axis[1],
+             (1 - math.cos(ang90)) * rot_axis[2] * rot_axis[1] + math.sin(ang90) * rot_axis[0],
+             math.cos(ang90) + (1 - math.cos(ang90)) * rot_axis[2] ** 2]
+        ])
+        rot_matrix2 = np.array([
+            [math.cos(ang270) + (1 - math.cos(ang270)) * rot_axis[0] ** 2,
+             (1 - math.cos(ang270)) * rot_axis[0] * rot_axis[1] - math.sin(ang270) * rot_axis[2],
+             (1 - math.cos(ang270)) * rot_axis[0] * rot_axis[2] + math.sin(ang270) * rot_axis[1]],
+            [(1 - math.cos(ang270)) * rot_axis[1] * rot_axis[0] + math.sin(ang270) * rot_axis[2],
+             math.cos(ang270) + (1 - math.cos(ang270)) * rot_axis[1] ** 2,
+             (1 - math.cos(ang270)) * rot_axis[1] * rot_axis[2] - math.sin(ang270) * rot_axis[0]],
+            [(1 - math.cos(ang270)) * rot_axis[2] * rot_axis[0] - math.sin(ang270) * rot_axis[1],
+             (1 - math.cos(ang270)) * rot_axis[2] * rot_axis[1] + math.sin(ang270) * rot_axis[0],
+             math.cos(ang270) + (1 - math.cos(ang270)) * rot_axis[2] ** 2]
+        ])
+        v1 = np.dot(route_vect, rot_matrix1)
+        v2 = np.dot(route_vect, rot_matrix2)
+        if v1[2] > v2[2]:
+            base_y = v1
+        else:
+            base_y = v2
+        return np.array([base_x, base_y, base_z])
+
+    def to_new_basis(self, point):
+        return np.dot(self.basis_1, point) + self.center_1
+
+    def to_old_basis(self, point):
+        return np.dot(point, self.basis) + self.center

@@ -23,7 +23,7 @@ from geometry import *
 freq = 20  # Герц, частота посылки управляющих команд аппарату
 node_name = "offboard_node"
 # Количество аппаратов
-INSTANCES_NUM = 3
+INSTANCES_NUM = 1
 
 controllers = []
 obstacles = {}
@@ -236,17 +236,36 @@ class CopterController():
 
     # Получение вектора для ухода от препятствий
     def get_avoid_velocity(self):
-        # return np.array([0, 0, 0])
+        # Перпендикулярная плоскость
         self.surface = Surface(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
         valid_obstacles = self.filter_obstacles()
+        # Проецируем на плоскости местоположения препятствий
+        for i in range(len(valid_obstacles)):
+            valid_obstacles[i] = self.surface.pr_point(valid_obstacles[i] + self.pose)
+        # новый базис
+        basis = Basis(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
+        rect_w = 1.2
+        rect_h = 0.5
+        # Перевод проекций в новый базис
+        for i in range(len(valid_obstacles)):
+            valid_obstacles[i] = basis.to_new_basis(valid_obstacles[i])
+
         res = np.array([0.0, 0.0, 0.0])
         if len(valid_obstacles) == 0:
             return res
-        for obstacle in valid_obstacles:
-            res += -(obstacle / np.linalg.norm(obstacle)) * (self.AVOID_RADIUS / np.linalg.norm(obstacle))
-        res = self.surface.pr_point(self.pose + res) - self.pose
-        if np.linalg.norm(res) > self.MAX_AVOID_SPEED:
-            res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
+        for i in range(len(valid_obstacles)):
+            # if valid_obstacles[i][0] > 0 and valid_obstacles[i][1] > 0:
+            print(valid_obstacles[i])
+        print('\n\n')
+
+
+        # valid_obstacles = self.filter_obstacles()
+        # for obstacle in valid_obstacles:
+        #     res += -(obstacle / np.linalg.norm(obstacle)) * (self.AVOID_RADIUS / np.linalg.norm(obstacle))
+        # res = self.surface.pr_point(self.pose + res) - self.pose
+        # if np.linalg.norm(res) > self.MAX_AVOID_SPEED:
+        #     res = res / np.linalg.norm(res) * self.MAX_AVOID_SPEED
+
         # print(self.instance_num, res)
 
         return res
@@ -295,9 +314,7 @@ class CopterController():
         res = []
         for vect in obstacles[self.instance_num]:
             pose = self.pose + vect
-            if self.surface.substitute_point(pose) >= 0 and np.linalg.norm(vect) <= self.AVOID_RADIUS or \
-                    self.surface.substitute_point(pose) < 0 and self.surface.get_point_dist(pose) <= 5 and \
-                    np.linalg.norm(vect) <= 5:
+            if self.surface.substitute_point(pose) >= 0 and np.linalg.norm(vect) <= self.AVOID_RADIUS:
                 res.append(np.array(vect))
         return res
 
