@@ -57,9 +57,9 @@ class CopterController():
         self.ARRIVAL_RADIUS = 2.0
         self.ARRIVAL_RADIUS_GLOBAL = 0.0001
         self.waypoint_list = get_waypoints()
-        self.AVOID_RADIUS = 20.0  # Радиус обнаружения "валидных" препятствий
+        self.AVOID_RADIUS = 25.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
-        self.AVOID_P_GAIN = 2.4
+        self.AVOID_P_GAIN = 2.5
         self.TRAJECTORY_CORRECTION = 1.7  # Множитель вектора скорости для корректирования траектории
         self.TRAJECTORY_CORRECTION_Z = 2.1
         self.MAXIMAL_DEVIATION = 8.0
@@ -108,7 +108,8 @@ class CopterController():
         # Добавление вектора для уклонения от препятствий
         velocity += self.get_avoid_velocity()
         # Добавление вектора для поддержания траектории маршрута
-        velocity += self.get_correction_velocity()
+        if np.linalg.norm(velocity) == 0:
+            velocity += self.get_correction_velocity()
         # Вектор к точке
         velocity += self.get_point_velocity(velocity)
 
@@ -246,8 +247,8 @@ class CopterController():
             valid_obstacles[i] = self.surface.pr_point(valid_obstacles[i] + self.pose)
         # новый базис
         basis = Basis(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
-        rect_w = 1.3
-        rect_h = 0.6
+        rect_w = 1.5
+        rect_h = 0.8
         # Перевод проекций в новый базис
         for i in range(len(valid_obstacles)):
             valid_obstacles[i] = basis.to_new_basis(valid_obstacles[i])
@@ -304,7 +305,7 @@ class CopterController():
 
         max_speed = self.MAX_VELOCITY
         if np.linalg.norm(self.pose - self.current_waypoint) < self.APPROACH_RADIUS or \
-                self.current_waypoint[2] < self.previous_waypoint[2]:
+                self.current_waypoint[2] < self.previous_waypoint[2] or len(self.filter_obstacles()) > 4:
             max_speed = self.APPROACH_VELOCITY
         if max_speed**2 > np.linalg.norm(velocity)**2:
             speed_to_point = math.sqrt(max_speed**2 - np.linalg.norm(velocity)**2)
@@ -322,7 +323,9 @@ class CopterController():
         res = []
         for vect in obstacles[self.instance_num]:
             pose = self.pose + vect
-            if self.surface.substitute_point(pose) >= 0 and np.linalg.norm(vect) <= self.AVOID_RADIUS:
+            if self.surface.substitute_point(pose) >= 0 and np.linalg.norm(vect) <= self.AVOID_RADIUS or \
+                    self.surface.substitute_point(pose) < 0 and self.surface.get_point_dist(pose) <= 5 and \
+                    np.linalg.norm(vect) <= 5:
                 res.append(np.array(vect))
         return res
 
