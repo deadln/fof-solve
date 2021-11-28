@@ -187,8 +187,8 @@ class Basis:
     def to_old_basis(self, point):
         return np.dot(point, self.basis) + self.center
 
-def is_crossing_rectangles(r1, r2, rect_w, rect_h):
-    if abs(r1[0] - r2[0]) > rect_w or abs(r1[1] - r2[1]) > rect_h:
+def is_crossing_rectangles(r1, r2, rect_w_1, rect_h_1, rect_w_2, rect_h_2):
+    if abs(r1[0] - r2[0]) > rect_w_1/2+rect_w_2/2 or abs(r1[1] - r2[1]) > rect_h_1/2+rect_h_2/2:
         return False
     return True
 

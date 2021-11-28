@@ -247,8 +247,8 @@ class CopterController():
             valid_obstacles[i] = self.surface.pr_point(valid_obstacles[i] + self.pose)
         # новый базис
         basis = Basis(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
-        rect_w = 1.7
-        rect_h = 1.0
+        rect_w = 1.5
+        rect_h = 0.8
         # Перевод проекций в новый базис
         for i in range(len(valid_obstacles)):
             valid_obstacles[i] = basis.to_new_basis(valid_obstacles[i])
@@ -339,6 +339,8 @@ class CopterController():
         # return error < self.ARRIVAL_RADIUS
 
     def get_avoid_point(self, obstacles, rect_w, rect_h, vect_step_len, step_count):
+        rect_w_drone = 1.8
+        rect_h_drone = 1.1
         search_vect = np.array([.0, .0, .0])
         step_angle = 2 * math.pi / step_count  # Угол поворота вектора поиска
         turn_axis = np.array([.0, .0, 1.0])  # Ось поворота вектора (по направлению движения)
@@ -349,7 +351,7 @@ class CopterController():
             for i in range(step_count):
                 cross_flag = False
                 for obstacle in obstacles:
-                    if is_crossing_rectangles(search_vect, obstacle, rect_w, rect_h):
+                    if is_crossing_rectangles(search_vect, obstacle, rect_w_drone, rect_h_drone, rect_w, rect_h):
                         cross_flag = True
                         break
                 if not cross_flag:
