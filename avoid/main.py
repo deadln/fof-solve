@@ -247,8 +247,8 @@ class CopterController():
             valid_obstacles[i] = self.surface.pr_point(valid_obstacles[i] + self.pose)
         # новый базис
         basis = Basis(self.route_line.pr_point(self.pose), self.current_waypoint - self.previous_waypoint)
-        rect_w = 1.5
-        rect_h = 0.8
+        rect_w = 1.7
+        rect_h = 1.0
         # Перевод проекций в новый базис
         for i in range(len(valid_obstacles)):
             valid_obstacles[i] = basis.to_new_basis(valid_obstacles[i])
