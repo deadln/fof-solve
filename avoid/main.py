@@ -57,9 +57,9 @@ class CopterController():
         self.ARRIVAL_RADIUS = 2.0
         self.ARRIVAL_RADIUS_GLOBAL = 0.0001
         self.waypoint_list = get_waypoints()
-        self.AVOID_RADIUS = 25.0  # Радиус обнаружения "валидных" препятствий
+        self.AVOID_RADIUS = 30.0  # Радиус обнаружения "валидных" препятствий
         self.MAX_AVOID_SPEED = 5.0  # Максимальная длина вектора уклонения от препятствий
-        self.AVOID_P_GAIN = 2.5
+        self.AVOID_P_GAIN = 3.0
         self.TRAJECTORY_CORRECTION = 1.7  # Множитель вектора скорости для корректирования траектории
         self.TRAJECTORY_CORRECTION_Z = 2.1
         self.MAXIMAL_DEVIATION = 8.0
@@ -70,6 +70,7 @@ class CopterController():
         self.current_waypoint = np.array([0., 0., 0.])
         self.previous_waypoint = np.array([0., 0., 0.])
         self.pose = np.array([])
+        self.pose_nb = np.array([])
         self.pose_global = np.array([])
         self.velocity = np.array([0., 0., 0.])
         self.mavros_state = State()
@@ -252,6 +253,7 @@ class CopterController():
         # Перевод проекций в новый базис
         for i in range(len(valid_obstacles)):
             valid_obstacles[i] = basis.to_new_basis(valid_obstacles[i])
+        self.pose_nb = basis.to_new_basis(self.pose)
 
         res = np.array([0.0, 0.0, 0.0])
         if len(valid_obstacles) == 0:
@@ -345,7 +347,10 @@ class CopterController():
         step_angle = 2 * math.pi / step_count  # Угол поворота вектора поиска
         turn_axis = np.array([.0, .0, 1.0])  # Ось поворота вектора (по направлению движения)
         iter_count = 0
-        while np.linalg.norm(search_vect) < self.MAXIMAL_DEVIATION + 2.0:
+        good_points = []
+        best_point = np.array([])
+        good_points.append(best_point)
+        while np.linalg.norm(search_vect) < self.MAXIMAL_DEVIATION + 2.0 and len(good_points) < step_count / 2:
             search_vect = np.array([.0, iter_count * vect_step_len, .0])  # Вектор для поиска места для уворота
             # print("vect len", np.linalg.norm(search_vect))
             for i in range(step_count):
@@ -357,14 +362,60 @@ class CopterController():
                 if not cross_flag:
                     if np.linalg.norm(search_vect) == 0.0:
                         return None
-                    return search_vect
+                    if self.is_valid_avoid_point(search_vect, obstacles, rect_w, rect_h, rect_w_drone, rect_h_drone):
+                        good_points.append(search_vect)
+                        if len(best_point) == 0 or np.linalg.norm(search_vect - self.pose_nb) < np.linalg.norm(best_point - self.pose_nb):
+                            best_point = np.array(search_vect)
+                        # return search_vect
                 # print(search_vect, "is bad")
                 if np.linalg.norm(search_vect) == 0.0:
                     break
                 # Поворот вектора
                 search_vect = turn_vector(search_vect, turn_axis, step_angle)
             iter_count += 1
-        return np.array([self.MAXIMAL_DEVIATION + 2.0, 0.0, 0.0])
+        if len(good_points) == 1:
+            return np.array([self.MAXIMAL_DEVIATION + 2.0, 0.0, 0.0])
+        return best_point
+
+    def is_valid_avoid_point(self, search_vect, obstacles, rect_w, rect_h, rect_w_drone, rect_h_drone):
+        step_size = 0.15
+        flight_dir = search_vect - self.pose_nb
+        flight_dir = flight_dir / np.linalg.norm(flight_dir)
+        check_point = np.array(self.pose_nb)
+        first_iter = True
+        in_rect = False
+        while np.linalg.norm(search_vect - check_point) > 0.2:
+            rect_count = 0
+            # print('check_point', check_point)
+            for obstacle in obstacles:
+                if is_crossing_rectangles(check_point, obstacle, rect_w_drone, rect_h_drone, rect_w, rect_h):
+                    if first_iter:
+                        rect_count += 1
+                        # print("pose in rect", self.pose_nb)
+                        in_rect = True
+                        first_iter = False
+                        break
+                    elif in_rect:
+                        rect_count += 1
+                        break
+                    else:
+                        return False
+                elif in_rect:
+                    # rect_count += 1
+                    continue
+                    # print(check_point, obstacle, rect_w_drone, rect_h_drone, rect_w, rect_h, is_crossing_rectangles(check_point, obstacle, rect_w_drone, rect_h_drone, rect_w, rect_h))
+                    # print("check_point out of rect", check_point)
+                    # in_rect = False
+            if in_rect and rect_count == 0:
+                # print("check_point out of rect", check_point)
+                in_rect = False
+            first_iter = False
+            # print('dist', np.linalg.norm(search_vect - check_point))
+            check_point = check_point + flight_dir * step_size
+        if in_rect:
+            return False
+        return True
+
 
 
 def radar_cb(msg):
